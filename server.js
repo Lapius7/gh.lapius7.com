@@ -24,6 +24,9 @@ query($login:String!, $cf:DateTime!, $ct:DateTime!, $pf:DateTime!, $pt:DateTime!
   user(login:$login) {
     login name avatarUrl url bio
     followers { totalCount } following { totalCount } gists { totalCount }
+    gl: gists(first:12, privacy:PUBLIC, orderBy:{field:PUSHED_AT, direction:DESC}) {
+      nodes { name description url pushedAt stargazerCount files(limit:5) { name size language { name color } } }
+    }
     organizations(first:10) { nodes { login avatarUrl url } }
     pinnedItems(first:6, types:REPOSITORY) { nodes { ... on Repository { ...R } } }
     cur: contributionsCollection(from:$cf, to:$ct) { ...C }
@@ -230,6 +233,10 @@ async function buildStats(period) {
     bestDay: best, avgPerActiveDay: active ? +(days.reduce((s, d) => s + d.count, 0) / active).toFixed(1) : 0,
     languages: top,
     pinned: u.pinnedItems.nodes,
+    gists: u.gl.nodes.map((g) => ({
+      id: g.name, url: g.url, description: g.description, pushedAt: g.pushedAt, stars: g.stargazerCount,
+      files: g.files.map((f) => ({ name: f.name, lang: f.language && f.language.name, color: f.language && f.language.color })),
+    })),
     repos: u.recent.nodes,
     open: { prs: { total: data.openPrs.issueCount, items: list(data.openPrs) }, reviews: { total: data.reviewReq.issueCount, items: list(data.reviewReq) }, issues: { total: data.openIssues.issueCount, items: list(data.openIssues) } },
     events, runs,

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lapius7 · GitHub</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232ecc8f'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/style.css?v=20261012d">
+<link rel="stylesheet" href="/style.css?v=20261017a">
 </head>
 <body class="loading">
 <div class="banner"><canvas id="bn"></canvas></div>
@@ -60,6 +60,8 @@
     </div></section>
 
     <section class="blk" id="pinnedblk" hidden><h2>Pinned</h2><div class="cards" id="pinned"></div></section>
+
+    <section class="blk" id="gistblk" hidden><h2>Gists</h2><div id="gists"></div></section>
 
     <section class="blk"><div class="tabs" id="tabs">
       <button data-k="prs" class="on">Open PRs</button><button data-k="reviews">Review requests</button><button data-k="issues">Assigned issues</button></div>
@@ -209,6 +211,11 @@ function render(s){
 
   $('pinnedblk').hidden = !s.pinned.length;
   $('pinned').innerHTML = s.pinned.map(r => `<a class="card" href="${esc(r.url)}" target="_blank" rel="noopener"><div class="rn">${esc(r.name)}</div><div class="rd">${esc(r.description || '')}</div><div class="rd" style="margin-top:8px">${r.primaryLanguage ? `<span class="dot" style="background:${esc(r.primaryLanguage.color||'#888')}"></span>${esc(r.primaryLanguage.name)} · ` : ''}★ ${r.stargazerCount} · ⑂ ${r.forkCount}</div></a>`).join('');
+
+  $('gistblk').hidden = !s.gists.length;
+  $('gists').innerHTML = s.gists.map(g => { const f = g.files[0] || {}; const more = g.files.length > 1 ? ` <span class="pill">+${g.files.length - 1}</span>` : '';
+    return `<a class="repo" href="${esc(g.url)}" target="_blank" rel="noopener"><div><div class="rn">${esc(f.name || g.id)}${more}</div><div class="rd">${esc(g.description || '')}</div></div>
+    <div class="rm">${f.lang ? `<span class="dot" style="background:${esc(f.color || '#888')}"></span>${esc(f.lang)}` : ''}${g.stars ? ` · ★ ${g.stars}` : ''}<br>${new Date(g.pushedAt).toLocaleDateString()}</div></a>`; }).join('');
 
   drawOpen(document.querySelector('#tabs button.on')?.dataset.k || 'prs');
   $('events').innerHTML = s.events.map(e => `<a class="item" href="${esc(e.url || '#')}" target="_blank" rel="noopener"><div><div class="t">${esc(e.text)}</div>${e.detail ? `<div class="s">${esc(e.detail)}</div>` : ''}</div><div class="r">${ago(e.at)}</div></a>`).join('') || '<div class="empty">No recent public activity</div>';

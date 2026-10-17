@@ -132,3 +132,6 @@ a.item:hover .t{text-decoration:underline}
 @media (prefers-reduced-motion:reduce){.wave i,.dots::after{animation:none}.wave i{background:var(--l2)}}
 
 .crumbs{display:flex;flex-wrap:wrap;gap:8px;margin:-4px 0 20px;position:relative;z-index:2}
+
+.pill{display:inline-block;margin-left:4px;padding:0 6px;border-radius:999px;background:var(--line);color:var(--muted);font-size:11px;font-weight:400;line-height:17px;font-variant-numeric:tabular-nums}
+#gists .rn,.repo .rd{overflow-wrap:anywhere;text-wrap:pretty}
