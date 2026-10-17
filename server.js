@@ -1,5 +1,6 @@
 // Minimal GitHub stats server: static files + /api/stats (GraphQL, cached). No dependencies.
 const http = require('http');
+const { renderOg } = require('./og');
 const fs = require('fs');
 const path = require('path');
 
@@ -36,7 +37,7 @@ query($login:String!, $cf:DateTime!, $ct:DateTime!, $pf:DateTime!, $pt:DateTime!
       contributionCalendar { totalContributions weeks { contributionDays { date contributionCount weekday } } }
     }
     recent: repositories(first:12, ownerAffiliations:OWNER, privacy:PUBLIC, orderBy:{field:PUSHED_AT, direction:DESC}) {
-      nodes { ...R pushedAt owner { login } }
+      nodes { ...R pushedAt owner { login } defaultBranchRef { target { ... on Commit { history(first:3) { nodes { messageHeadline committedDate url } } } } } }
     }
     all: repositories(first:100, ownerAffiliations:OWNER, isFork:false) {
       nodes { stargazerCount languages(first:8, orderBy:{field:SIZE, direction:DESC}) { edges { size node { name color } } } }
@@ -200,12 +201,17 @@ async function buildStats(period) {
 
   // recent events + Actions runs (best effort)
   const [events, runs] = await Promise.all([
-    rest(`/users/${GH_USER}/events/public?per_page=50`).then((ev) => ev.map((e) => ({ ...summarizeEvent(e), at: e.created_at })).filter((e) => e.text).slice(0, 12)).catch(() => []),
+    rest(`/users/${GH_USER}/events/public?per_page=50`).then((ev) => ev.map((e) => ({ ...summarizeEvent(e), at: e.created_at })).filter((e) => e.text && e.icon !== 'commit')).catch(() => []),
     Promise.all(u.recent.nodes.slice(0, 5).map((rp) =>
       rest(`/repos/${rp.owner.login}/${rp.name}/actions/runs?per_page=2`)
         .then((j) => j.workflow_runs.map((w) => ({ repo: rp.name, name: w.name, status: w.status, conclusion: w.conclusion, url: w.html_url, at: w.created_at })))
         .catch(() => []))).then((a) => a.flat().sort((x, y) => y.at.localeCompare(x.at)).slice(0, 6)),
   ]);
+
+  // pushes come from GraphQL (the public events feed lags by hours)
+  const commits = u.recent.nodes.flatMap((rp) => ((rp.defaultBranchRef && rp.defaultBranchRef.target && rp.defaultBranchRef.target.history.nodes) || [])
+    .map((n) => ({ icon: 'commit', text: `Pushed to ${rp.owner.login}/${rp.name}`, detail: n.messageHeadline, url: n.url, at: n.committedDate })));
+  const feed = [...events, ...commits].sort((x, y) => y.at.localeCompare(x.at)).slice(0, 12);
 
   const sum = (c) => ({
     contributions: c.contributionCalendar.totalContributions, prsOpened: c.totalPullRequestContributions,
@@ -239,7 +245,7 @@ async function buildStats(period) {
     })),
     repos: u.recent.nodes,
     open: { prs: { total: data.openPrs.issueCount, items: list(data.openPrs) }, reviews: { total: data.reviewReq.issueCount, items: list(data.reviewReq) }, issues: { total: data.openIssues.issueCount, items: list(data.openIssues) } },
-    events, runs,
+    events: feed, runs,
     generatedAt: now.toISOString(),
   };
 }
@@ -333,6 +339,7 @@ async function getOrg(login) {
   return v;
 }
 
+let ogCache = null;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 
 http.createServer(async (req, res) => {
@@ -349,6 +356,13 @@ http.createServer(async (req, res) => {
       res.end(JSON.stringify({ error: 'upstream_error' }));
     }
     return;
+  }
+  if (url.pathname === '/og.png') {
+    try {
+      if (!ogCache || Date.now() - ogCache.t > TTL) ogCache = { t: Date.now(), v: renderOg(await getStats('week')) };
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=600' });
+      return res.end(ogCache.v);
+    } catch (e) { console.error(e.message); res.writeHead(502); return res.end(); }
   }
   if (url.pathname === '/api/year') {
     const y = +url.searchParams.get('y');
