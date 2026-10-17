@@ -384,7 +384,7 @@ http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ ...(await getOrg(login)), orgNames: await getOrgNames(), me: orgList.me }));
     } catch (e) { console.error(e.message); res.writeHead(502, { 'Content-Type': 'application/json' }); return res.end('{"error":"upstream_error"}'); }
   }
-  const seg = url.pathname.match(/^\/([A-Za-z0-9-]+)(?:\/(?:overview|activity|repos))?\/?$/);
+  const seg = url.pathname.match(/^\/([A-Za-z0-9-]+)(?:\/(?:overview|work|activity|repos))?\/?$/);
   if (seg && !fs.existsSync(path.join(PUBLIC, seg[1]))) {
     try {
       if ((await getOrgNames()).some((n) => n.login.toLowerCase() === seg[1].toLowerCase())) {
