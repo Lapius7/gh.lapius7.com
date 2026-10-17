@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lapius7 · GitHub</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232ecc8f'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css?v=20261012d">
+</head>
+<body class="loading">
+<div class="banner"><canvas id="bn"></canvas></div>
+<div id="tip"></div>
+<button class="theme" id="theme" aria-label="Toggle theme">◐</button>
+<main class="wrap">
+  <div id="loader" role="status" aria-live="polite"><div class="wave" aria-hidden="true"></div><span>Loading GitHub data<b class="dots"></b></span></div>
+  <div class="profile">
+    <img id="avatar" alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">
+    <div><h1 id="name">Lapius7</h1><a id="link" href="https://github.com/Lapius7">@Lapius7</a>
+      <div class="meta" id="meta"></div></div>
+  </div>
+  <nav class="crumbs" id="crumbs"></nav>
+
+  <div class="search">
+    <input id="q" placeholder="Search repositories…" autocomplete="off" aria-label="Search repositories">
+    <div class="foot"><span>Filters the repository list below</span><span id="repocount"></span></div>
+  </div>
+
+  <section id="app" class="skeleton">
+    <div class="row">
+      <h2>Overview</h2>
+      <div class="ctrls">
+        <select id="period" aria-label="Period"><option value="week">This week</option><option value="month">This month</option></select>
+        <select id="repo" aria-label="Repositories"><option value="">All repositories</option></select>
+      </div>
+    </div>
+    <div class="stats" id="stats"></div>
+
+    <div class="heatcard">
+      <div class="heat-head">
+        <div class="heat-title"><span id="yeartotal">… contributions</span><small id="heatsub"></small></div>
+        <div class="years" id="years"></div>
+      </div>
+      <div class="heat" id="heat">
+        <div class="dow"><span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span><span></span></div>
+        <div><div class="months" id="months"></div><div class="cells" id="cells"></div></div>
+      </div>
+      <div class="heat-foot"><span id="heatnote"></span>
+        <span class="legend">Less <i style="background:var(--l0)"></i><i style="background:var(--l1)"></i><i style="background:var(--l2)"></i><i style="background:var(--l3)"></i><i style="background:var(--l4)"></i> More</span></div>
+    </div>
+    <div class="extra" id="extra"></div>
+
+    <section class="blk" style="margin-top:0"><div class="two">
+      <div><h2>By weekday</h2><div class="bars" id="wdbars"></div></div>
+      <div><h2>By month</h2><div class="bars" id="mobars"></div></div>
+    </div></section>
+
+    <section class="blk"><div class="two">
+      <div><h2>Activity breakdown (last year)</h2><div class="stack" id="typestack"></div><div class="key" id="typekey"></div></div>
+      <div><h2>Languages</h2><div class="stack" id="langstack"></div><div class="key" id="langkey"></div></div>
+    </div></section>
+
+    <section class="blk" id="pinnedblk" hidden><h2>Pinned</h2><div class="cards" id="pinned"></div></section>
+
+    <section class="blk"><div class="tabs" id="tabs">
+      <button data-k="prs" class="on">Open PRs</button><button data-k="reviews">Review requests</button><button data-k="issues">Assigned issues</button></div>
+      <div id="openlist"></div></section>
+
+    <section class="blk"><h2>Recent activity</h2><div id="events"></div></section>
+    <section class="blk"><h2>GitHub Actions</h2><div id="runs"></div></section>
+    <section class="blk repos"><h2>Recently pushed</h2><div id="repos"></div></section>
+  </section>
+  <p class="foot2" id="foot"></p>
+</main>
+
+<script src="/common.js?v=20261012d"></script>
+<script>
+let repos = [];
+
+// ---- render ----
+let S = null;
+const delta = (cur, prev, label) => {
+  const d = cur - prev;
+  const cls = d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
+  const sym = d > 0 ? '↗' : d < 0 ? '↘' : '→';
+  return `<div class="delta"><span class="chip ${cls}">${sym} ${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d)}</span> vs ${label}</div>`;
+};
+
+function figures(){
+  const repo = $('repo').value;
+  const pick = (p) => {
+    if (!repo) return { contributions: p.contributions, prsOpened: p.prsOpened, prsMerged: p.prsMerged, reviews: p.reviews };
+    const r = p.byRepo[repo] || { commits: 0, prs: 0, reviews: 0, issues: 0 };
+    return { contributions: r.commits + r.prs + r.reviews + r.issues, prsOpened: r.prs, prsMerged: null, reviews: r.reviews };
+  };
+  return [pick(S.cur), pick(S.prev)];
+}
+
+function drawStats(){
+  const [c, p] = figures();
+  const items = [['Contributions','contributions'],['Pull requests opened','prsOpened'],['Pull requests merged','prsMerged'],['Reviews','reviews']];
+  $('stats').innerHTML = items.map(([l,k]) => c[k] == null
+    ? `<div class="stat"><div class="label">${l}</div><div class="num">–</div><div class="delta">n/a per repository</div></div>`
+    : `<div class="stat"><div class="label">${l}</div><div class="num">${c[k].toLocaleString()}</div>${delta(c[k], p[k], S.compareLabel)}</div>`).join('');
+}
+
+let heatYear = '', heatData = null;
+const DOWN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function drawHeat(days, total, rolling){
+  heatData = { days, total, rolling };
+  const max = Math.max(1, ...days.map(d => d.count));
+  const lvl = (n) => n === 0 ? 0 : Math.min(4, Math.ceil(n / max * 4));
+  const first = days[0].weekday, cols = Math.ceil((days.length + first) / 7);
+  const heat = $('heat'), gap = 2;
+  const avail = heat.clientWidth - 38;
+  const cs = Math.max(6, Math.min(16, Math.floor((avail - (cols - 1) * gap) / cols)));
+  heat.style.setProperty('--cs', cs + 'px'); heat.style.setProperty('--gap', gap + 'px');
+  const today = new Date().toISOString().slice(0, 10);
+  let cells = '<div class="cell empty"></div>'.repeat(first), months = '', lastM = -1;
+  days.forEach((d, i) => {
+    cells += `<div class="cell${d.date === today ? ' today' : ''}" data-l="${lvl(d.count)}" data-d="${d.date}" data-c="${d.count}" style="animation-delay:${Math.floor((i + first) / 7) * 6}ms"></div>`;
+    const m = +d.date.slice(5, 7) - 1, col = Math.floor((i + first) / 7);
+    if (d.weekday === 0 && m !== lastM && col < cols - 1) { months += `<span style="left:${col * (cs + gap)}px">${MON[m]}</span>`; lastM = m; }
+  });
+  $('cells').innerHTML = cells; $('months').innerHTML = months;
+  $('yeartotal').textContent = `${total.toLocaleString()} contributions ${rolling ? 'in the last year' : 'in ' + heatYear}`;
+  const act = days.filter(d => d.count > 0).length;
+  $('heatsub').textContent = `${act} active days · ${days[0].date} → ${days[days.length - 1].date}`;
+  $('heatnote').textContent = 'Hover a cell for details';
+}
+addEventListener('resize', () => { if (heatData) drawHeat(heatData.days, heatData.total, heatData.rolling); });
+
+const tip = $('tip');
+$('heat').addEventListener('mouseover', (e) => {
+  const c = e.target.closest('.cell[data-d]'); if (!c) return;
+  const n = +c.dataset.c, d = new Date(c.dataset.d + 'T00:00:00Z');
+  tip.innerHTML = `<b>${n ? n.toLocaleString() + ' contribution' + (n > 1 ? 's' : '') : 'No contributions'}</b> · ${DOWN[d.getUTCDay()]}, ${MON[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+  const r = c.getBoundingClientRect();
+  tip.style.left = Math.min(innerWidth - 120, Math.max(120, r.left + r.width / 2)) + 'px';
+  tip.style.top = (r.top - 8) + 'px'; tip.style.opacity = 1;
+});
+$('heat').addEventListener('mouseleave', () => { tip.style.opacity = 0; });
+
+function drawYears(){
+  const y = new Date().getFullYear();
+  const opts = [['', 'Last year'], ...Array.from({ length: 5 }, (_, i) => [String(y - i), String(y - i)])];
+  $('years').innerHTML = opts.map(([v, l]) => `<button data-y="${v}" class="${v === heatYear ? 'on' : ''}">${l}</button>`).join('');
+}
+$('years').addEventListener('click', async (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  heatYear = b.dataset.y; drawYears();
+  if (!heatYear) return drawHeat(S.year.days, S.year.total, true);
+  try { const y = await (await fetch('/api/year?y=' + heatYear)).json(); drawHeat(y.days, y.total, false); } catch {}
+});
+
+const bars = (vals, labels) => { const m = Math.max(1, ...vals); const hi = vals.indexOf(Math.max(...vals));
+  return vals.map((v,i) => `<div class="${i===hi?'hi':''}" title="${v.toLocaleString()}"><i style="height:${Math.round(v/m*70)}px"></i><span>${labels[i]}</span></div>`).join(''); };
+const stack = (parts) => { const t = parts.reduce((s,p) => s + p.v, 0) || 1;
+  return [parts.map(p => `<i style="width:${p.v/t*100}%;background:${p.c}"></i>`).join(''),
+          parts.map(p => `<span><span class="dot" style="background:${p.c}"></span>${esc(p.n)}<b>${p.label ?? (p.v/t*100).toFixed(1)+'%'}</b></span>`).join('')]; };
+
+function drawOpen(k){
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.k === k));
+  const o = S.open[k];
+  $('openlist').innerHTML = o.items.length ? o.items.map(i => `<a class="item" href="${esc(i.url)}" target="_blank" rel="noopener"><div><div class="t">${esc(i.title)}</div><div class="s">${esc(i.repo)}</div></div><div class="r">${ago(i.at)}</div></a>`).join('')
+      + (o.total > o.items.length ? `<div class="empty">+ ${o.total - o.items.length} more</div>` : '') : '<div class="empty">Nothing here</div>';
+}
+
+function render(s){
+  S = s;
+  document.body.classList.remove('loading');
+  $('app').classList.remove('skeleton');
+  $('avatar').src = s.user.avatar;
+  $('name').textContent = s.user.name || s.user.login;
+  $('link').href = s.user.url; $('link').textContent = '@' + s.user.login;
+  $('meta').innerHTML = `<span><b>${s.user.followers}</b> followers</span><span><b>${s.user.following}</b> following</span><span><b>${s.user.stars}</b> stars</span><span><b>${s.user.gists}</b> gists</span>`;
+  $('crumbs').innerHTML = [{ login: s.user.login, avatarUrl: s.user.avatar, href: '/', org: false, on: true }, ...s.user.orgs.map(n => ({ ...n, href: '/' + n.login, org: true }))]
+    .map(n => `<a class="ic ${n.org ? 'org' : ''} ${n.on ? 'on' : ''}" href="${esc(n.href)}" title="${esc(n.login)}" aria-label="${esc(n.login)}"><img src="${esc(n.avatarUrl)}" alt=""></a>`).join('');
+  document.title = `${s.user.name || s.user.login} · GitHub`;
+
+  const names = [...new Set([...Object.keys(s.cur.byRepo), ...Object.keys(s.prev.byRepo)])].sort();
+  const sel = $('repo'), keep = sel.value;
+  sel.innerHTML = '<option value="">All repositories</option>' + names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  sel.value = names.includes(keep) ? keep : '';
+  drawStats();
+
+  drawYears();
+  if (!heatYear) drawHeat(s.year.days, s.year.total, true);
+
+  const [yy, mm] = s.bestMonth.month.split('-');
+  $('extra').innerHTML = [
+    ['Current streak', `${s.streak.current} days`, "Weekends don't break it"],
+    ['Longest streak', `${s.streak.longest} days`, ''],
+    ['Most active month', s.bestMonth.month ? `${MON[+mm-1]} ${yy}` : '–', `${s.bestMonth.count.toLocaleString()} contributions`],
+    ['Most active day', WD[s.bestWeekday.index], `${s.bestWeekday.count.toLocaleString()} contributions`],
+    ['Best single day', `${s.bestDay.count}`, s.bestDay.date],
+    ['Avg per active day', `${s.avgPerActiveDay}`, 'contributions'],
+  ].map(([l,n,sub]) => `<div class="stat"><div class="label">${l}</div><div class="num">${n}</div><div class="label">${sub}</div></div>`).join('');
+  $('extra').style.gridTemplateColumns = 'repeat(3,1fr)'; $('extra').style.rowGap = '28px';
+
+  $('wdbars').innerHTML = bars([1,2,3,4,5,6,0].map(i => s.byWeekday[i]), ['M','T','W','T','F','S','S']);
+  const keys = Object.keys(s.byMonth).sort();
+  $('mobars').innerHTML = bars(keys.map(k => s.byMonth[k]), keys.map(k => MON[+k.slice(5)-1][0]));
+
+  const t = s.year.types;
+  const [ts, tk] = stack([{n:'Commits',v:t.commits,c:'var(--l4)'},{n:'Pull requests',v:t.prs,c:'#5b8def'},{n:'Issues',v:t.issues,c:'#e0b341'},{n:'Reviews',v:t.reviews,c:'#c26be0'}]);
+  $('typestack').innerHTML = ts; $('typekey').innerHTML = tk;
+  const [ls, lk] = stack(s.languages.map(l => ({n:l.name, v:l.pct, c:l.color || '#888'})));
+  $('langstack').innerHTML = ls; $('langkey').innerHTML = lk;
+
+  $('pinnedblk').hidden = !s.pinned.length;
+  $('pinned').innerHTML = s.pinned.map(r => `<a class="card" href="${esc(r.url)}" target="_blank" rel="noopener"><div class="rn">${esc(r.name)}</div><div class="rd">${esc(r.description || '')}</div><div class="rd" style="margin-top:8px">${r.primaryLanguage ? `<span class="dot" style="background:${esc(r.primaryLanguage.color||'#888')}"></span>${esc(r.primaryLanguage.name)} · ` : ''}★ ${r.stargazerCount} · ⑂ ${r.forkCount}</div></a>`).join('');
+
+  drawOpen(document.querySelector('#tabs button.on')?.dataset.k || 'prs');
+  $('events').innerHTML = s.events.map(e => `<a class="item" href="${esc(e.url || '#')}" target="_blank" rel="noopener"><div><div class="t">${esc(e.text)}</div>${e.detail ? `<div class="s">${esc(e.detail)}</div>` : ''}</div><div class="r">${ago(e.at)}</div></a>`).join('') || '<div class="empty">No recent public activity</div>';
+  $('runs').innerHTML = s.runs.map(r => { const st = r.status !== 'completed' ? ['run','● running'] : r.conclusion === 'success' ? ['ok','✓ success'] : ['bad','✕ ' + (r.conclusion || 'failed')];
+    return `<a class="item" href="${esc(r.url)}" target="_blank" rel="noopener"><div><div class="t">${esc(r.name)}</div><div class="s">${esc(r.repo)}</div></div><div class="r ${st[0]}">${st[1]} · ${ago(r.at)}</div></a>`; }).join('') || '<div class="empty">No workflow runs</div>';
+
+  repos = s.repos; drawRepos();
+  $('foot').textContent = `Updated ${new Date(s.generatedAt).toLocaleString()} · GitHub API`;
+}
+
+function drawRepos(){
+  const q = $('q').value.trim().toLowerCase();
+  const list = repos.filter(r => !q || (r.name + ' ' + (r.description||'')).toLowerCase().includes(q));
+  $('repocount').textContent = `${list.length} / ${repos.length}`;
+  $('repos').innerHTML = list.map(r => `<a class="repo" href="${esc(r.url)}" target="_blank" rel="noopener">
+    <div><div class="rn">${esc(r.name)}</div><div class="rd">${esc(r.description || '')}</div></div>
+    <div class="rm">${r.primaryLanguage ? `<span class="dot" style="background:${esc(r.primaryLanguage.color||'#888')}"></span>${esc(r.primaryLanguage.name)}` : ''}${r.stargazerCount ? ` · ★ ${r.stargazerCount}` : ''}<br>${new Date(r.pushedAt).toLocaleDateString()}</div></a>`).join('')
+    || '<div class="rd" style="padding:12px 0">No match</div>';
+}
+
+async function load(){
+  try {
+    const r = await fetch('/api/stats?period=' + $('period').value);
+    if (!r.ok) throw 0;
+    render(await r.json());
+  } catch { document.body.classList.remove('loading'); $('app').classList.remove('skeleton'); $('app').insertAdjacentHTML('afterbegin', '<div class="err">Failed to load GitHub data.</div>'); }
+}
+$('period').onchange = () => { document.querySelector('.err')?.remove(); load(); };
+$('repo').onchange = drawStats;
+$('tabs').onclick = (e) => e.target.dataset.k && drawOpen(e.target.dataset.k);
+$('q').oninput = drawRepos;
+load();
+</script>
+</body>
+</html>

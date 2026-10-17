@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Organization · GitHub</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232ecc8f'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css?v=20261012d">
+<style>
+.profile img.sq{border-radius:14px}
+.stats.s2{margin-top:0}
+</style>
+</head>
+<body class="loading">
+<div id="tip"></div>
+<button class="theme" id="theme" aria-label="Toggle theme">◐</button>
+<div class="banner"><canvas id="bn"></canvas></div>
+<main class="wrap">
+  <div id="loader" role="status" aria-live="polite"><div class="wave" aria-hidden="true"></div><span>Loading GitHub data<b class="dots"></b></span></div>
+  <div class="profile">
+    <img id="avatar" class="sq" alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">
+    <div><h1 id="name">…</h1><a id="link" href="#"></a><div class="meta" id="meta"></div></div>
+  </div>
+  <nav class="crumbs" id="crumbs"></nav>
+
+  <div class="search">
+    <input id="q" placeholder="Search repositories…" autocomplete="off" aria-label="Search repositories">
+    <div class="foot"><span>Filters the repository list below</span><span id="repocount"></span></div>
+  </div>
+
+  <section id="app" class="skeleton">
+    <div class="row"><h2>Overview</h2></div>
+    <div class="stats" id="stats"></div>
+    <div class="stats s2" id="stats2"></div>
+
+    <section class="blk"><h2>Languages</h2><div class="stack" id="langstack"></div><div class="key" id="langkey"></div></section>
+    <section class="blk" id="pinnedblk" hidden><h2>Pinned</h2><div class="cards" id="pinned"></div></section>
+    <section class="blk"><h2>Recent activity</h2><div id="events"></div></section>
+    <section class="blk"><h2>GitHub Actions</h2><div id="runs"></div></section>
+    <section class="blk repos"><h2>Repositories</h2><div id="repos"></div></section>
+  </section>
+  <p class="foot2" id="foot"></p>
+</main>
+<script src="/common.js?v=20261012d"></script>
+<script>
+let repos = [];
+const stack = (parts) => { const t = parts.reduce((s,p) => s + p.v, 0) || 1;
+  return [parts.map(p => `<i style="width:${p.v/t*100}%;background:${p.c}"></i>`).join(''),
+          parts.map(p => `<span><span class="dot" style="background:${p.c}"></span>${esc(p.n)}<b>${p.v.toFixed(1)}%</b></span>`).join('')]; };
+const stat = (l, n, sub = '') => `<div class="stat"><div class="label">${l}</div><div class="num">${n}</div><div class="label">${sub}</div></div>`;
+
+function drawRepos(){
+  const q = $('q').value.trim().toLowerCase();
+  const list = repos.filter(r => !q || (r.name + ' ' + (r.description||'')).toLowerCase().includes(q));
+  $('repocount').textContent = `${list.length} / ${repos.length}`;
+  $('repos').innerHTML = list.map(r => `<a class="repo" href="${esc(r.url)}" target="_blank" rel="noopener">
+    <div><div class="rn">${esc(r.name)}</div><div class="rd">${esc(r.description || '')}</div></div>
+    <div class="rm">${r.primaryLanguage ? `<span class="dot" style="background:${esc(r.primaryLanguage.color||'#888')}"></span>${esc(r.primaryLanguage.name)}` : ''}${r.stargazerCount ? ` · ★ ${r.stargazerCount}` : ''}<br>${new Date(r.pushedAt).toLocaleDateString()}</div></a>`).join('')
+    || '<div class="rd" style="padding:12px 0">No match</div>';
+}
+
+function render(s){
+  document.body.classList.remove('loading');
+  $('app').classList.remove('skeleton');
+  const o = s.org;
+  $('avatar').src = o.avatar;
+  $('name').textContent = o.name || o.login;
+  $('link').href = o.url; $('link').textContent = '@' + o.login + (o.description ? ' · ' + o.description : '');
+  document.title = `${o.name || o.login} · GitHub`;
+  $('meta').innerHTML = [o.location, o.website && `<a href="${esc(o.website)}" target="_blank" rel="noopener">${esc(o.website.replace(/^https?:\/\//,''))}</a>`].filter(Boolean).map(x => `<span>${x.startsWith('<') ? x : esc(x)}</span>`).join('');
+  $('crumbs').innerHTML = [{ login: s.me.login, avatarUrl: s.me.avatarUrl, href: '/', org: false }, ...s.orgNames.map(n => ({ ...n, href: '/' + n.login, org: true }))]
+    .map(n => `<a class="ic ${n.org ? 'org' : ''} ${n.login.toLowerCase() === o.login.toLowerCase() ? 'on' : ''}" href="${esc(n.href)}" title="${esc(n.login)}" aria-label="${esc(n.login)}"><img src="${esc(n.avatarUrl)}" alt=""></a>`).join('');
+  const t = s.totals;
+  $('stats').innerHTML = stat('Repositories', t.repos) + stat('Stars', t.stars.toLocaleString()) + stat('Forks', t.forks.toLocaleString()) + stat('Members', o.members);
+  $('stats2').innerHTML = stat('Open PRs', t.openPrs.toLocaleString()) + stat('Open issues', t.openIssues.toLocaleString()) + stat('Teams', o.teams) + stat('Created', new Date(o.createdAt).toLocaleDateString());
+
+  const [ls, lk] = stack(s.languages.map(l => ({ n: l.name, v: l.pct, c: l.color || '#888' })));
+  $('langstack').innerHTML = ls; $('langkey').innerHTML = lk || '<span>No language data</span>';
+
+  $('pinnedblk').hidden = !s.pinned.length;
+  $('pinned').innerHTML = s.pinned.map(r => `<a class="card" href="${esc(r.url)}" target="_blank" rel="noopener"><div class="rn">${esc(r.name)}</div><div class="rd">${esc(r.description || '')}</div><div class="rd" style="margin-top:8px">${r.primaryLanguage ? `<span class="dot" style="background:${esc(r.primaryLanguage.color||'#888')}"></span>${esc(r.primaryLanguage.name)} · ` : ''}★ ${r.stargazerCount} · ⑂ ${r.forkCount}</div></a>`).join('');
+
+  $('events').innerHTML = s.events.map(e => `<a class="item" href="${esc(e.url || '#')}" target="_blank" rel="noopener"><div><div class="t">${esc(e.text)}</div><div class="s">${esc(e.actor)}${e.detail ? ' · ' + esc(e.detail) : ''}</div></div><div class="r">${ago(e.at)}</div></a>`).join('') || '<div class="empty">No recent public activity</div>';
+  $('runs').innerHTML = s.runs.map(r => { const st = r.status !== 'completed' ? ['run','● running'] : r.conclusion === 'success' ? ['ok','✓ success'] : ['bad','✕ ' + (r.conclusion || 'failed')];
+    return `<a class="item" href="${esc(r.url)}" target="_blank" rel="noopener"><div><div class="t">${esc(r.name)}</div><div class="s">${esc(r.repo)}</div></div><div class="r ${st[0]}">${st[1]} · ${ago(r.at)}</div></a>`; }).join('') || '<div class="empty">No workflow runs</div>';
+
+  repos = s.repos; drawRepos();
+  $('foot').textContent = `Updated ${new Date(s.generatedAt).toLocaleString()} · GitHub API`;
+}
+
+$('q').oninput = drawRepos;
+(async () => {
+  const name = location.pathname.replace(/\//g, '');
+  try {
+    const r = await fetch('/api/org?name=' + encodeURIComponent(name));
+    if (!r.ok) throw 0;
+    render(await r.json());
+  } catch { document.body.classList.remove('loading'); $('app').classList.remove('skeleton'); $('app').insertAdjacentHTML('afterbegin', '<div class="err">Failed to load organization.</div>'); }
+})();
+</script>
+</body>
+</html>
