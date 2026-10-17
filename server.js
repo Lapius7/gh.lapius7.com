@@ -284,6 +284,8 @@ async function getOrgNames() {
   return orgList.v;
 }
 
+const openList = (x) => x.nodes.filter((n) => n.title).map((n) => ({ title: n.title, url: n.url, repo: n.repository.nameWithOwner, at: n.createdAt }));
+
 async function buildOrg(login) {
   const d = await gql(`query($o:String!,$pr:String!,$is:String!){
     organization(login:$o){ login name description avatarUrl url websiteUrl location createdAt
@@ -293,8 +295,8 @@ async function buildOrg(login) {
       repositories(first:50, privacy:PUBLIC, orderBy:{field:PUSHED_AT, direction:DESC}){ totalCount
         nodes{ ...R pushedAt isArchived isFork languages(first:6, orderBy:{field:SIZE, direction:DESC}){ edges{ size node{ name color } } } } }
     }
-    openPrs: search(query:$pr, type:ISSUE){ issueCount }
-    openIssues: search(query:$is, type:ISSUE){ issueCount }
+    openPrs: search(query:$pr, type:ISSUE, first:100){ issueCount nodes { ... on PullRequest { title url createdAt repository { nameWithOwner } } ... on Issue { title url createdAt repository { nameWithOwner } } } }
+    openIssues: search(query:$is, type:ISSUE, first:100){ issueCount nodes { ... on PullRequest { title url createdAt repository { nameWithOwner } } ... on Issue { title url createdAt repository { nameWithOwner } } } }
   }
   fragment R on Repository { name description url stargazerCount forkCount primaryLanguage { name color } }`,
     { o: login, pr: `org:${login} is:pr is:open`, is: `org:${login} is:issue is:open` });
@@ -326,6 +328,7 @@ async function buildOrg(login) {
   return {
     org: { login: o.login, name: o.name, description: o.description, avatar: o.avatarUrl, url: o.url, website: o.websiteUrl, location: o.location, createdAt: o.createdAt, members: o.membersWithRole.totalCount, teams: o.teams.totalCount },
     totals: { repos: o.repositories.totalCount, stars, forks, openPrs: d.openPrs.issueCount, openIssues: d.openIssues.issueCount },
+    open: { prs: { total: d.openPrs.issueCount, items: openList(d.openPrs) }, issues: { total: d.openIssues.issueCount, items: openList(d.openIssues) } },
     languages: top, pinned: o.pinnedItems.nodes, repos: repos.filter((r) => !r.isArchived).slice(0, 30),
     events, runs, generatedAt: new Date().toISOString(),
   };

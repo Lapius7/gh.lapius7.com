@@ -25,13 +25,18 @@
 
   <section id="app" class="skeleton">
     <div class="tabs ptabs" id="ptabs" role="tablist">
-      <button data-p="overview" class="on">Overview</button><button data-p="activity">Activity</button><button data-p="repos">Repositories</button></div>
+      <button data-p="overview" class="on">Overview</button><button data-p="work">Work</button><button data-p="activity">Activity</button><button data-p="repos">Repositories</button></div>
     <div class="pane" data-p="overview">
     <div class="stats" id="stats"></div>
     <div class="stats s2" id="stats2"></div>
 
     <section class="blk"><h2>Languages</h2><div class="stack" id="langstack"></div><div class="key" id="langkey"></div></section>
-    <section class="blk" id="pinnedblk" hidden><h2>Pinned</h2><div class="cards" id="pinned"></div></section>
+    </div>
+    <div class="pane" data-p="work" hidden>
+    <section class="blk" id="pinnedblk" hidden style="margin-top:0"><h2>Pinned</h2><div class="cards" id="pinned"></div></section>
+    <section class="blk"><div class="tabs" id="tabs">
+      <button data-k="prs" class="on">Open PRs</button><button data-k="issues">Open issues</button></div>
+      <div id="openlist"></div></section>
     </div>
     <div class="pane" data-p="activity" hidden>
     <section class="blk" style="margin-top:0"><h2>Recent activity</h2><div id="events"></div></section>
@@ -66,7 +71,26 @@ function drawRepos(){
     || '<div class="rd" style="padding:12px 0">No match</div>';
 }
 
+S = null;
+let openPage = 0, openKey = 'prs';
+const PER = 10;
+function drawOpen(k, page){
+  if (k !== openKey) openPage = 0;
+  openKey = k; if (page != null) openPage = page;
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.k === k));
+  const o = S.open[k], pages = Math.max(1, Math.ceil(o.items.length / PER));
+  openPage = Math.min(openPage, pages - 1);
+  const rows = o.items.slice(openPage * PER, (openPage + 1) * PER);
+  $('openlist').innerHTML = rows.length ? rows.map(i => `<a class="item" href="${esc(i.url)}" target="_blank" rel="noopener"><div><div class="t">${esc(i.title)}</div><div class="s">${esc(i.repo)}</div></div><div class="r">${ago(i.at)}</div></a>`).join('')
+    + (pages > 1 ? `<div class="pager"><button data-d="-1"${openPage === 0 ? ' disabled' : ''}>Prev</button><span>${openPage + 1} / ${pages} · ${o.total} total</span><button data-d="1"${openPage >= pages - 1 ? ' disabled' : ''}>Next</button></div>` : '') : '<div class="empty">Nothing here</div>';
+}
+$('openlist').addEventListener('click', (e) => {
+  const b = e.target.closest('.pager button'); if (b && !b.disabled) drawOpen(openKey, openPage + Number(b.dataset.d));
+});
+
+$('tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) drawOpen(b.dataset.k); });
 function render(s){
+  S = s;
   document.body.classList.remove('loading');
   $('app').classList.remove('skeleton');
   const o = s.org;
@@ -84,6 +108,7 @@ function render(s){
   const [ls, lk] = stack(s.languages.map(l => ({ n: l.name, v: l.pct, c: l.color || '#888' })));
   $('langstack').innerHTML = ls; $('langkey').innerHTML = lk || '<span>No language data</span>';
 
+  drawOpen('prs');
   $('pinnedblk').hidden = !s.pinned.length;
   $('pinned').innerHTML = s.pinned.map(r => `<a class="card" href="${esc(r.url)}" target="_blank" rel="noopener"><div class="rn">${esc(r.name)}</div><div class="rd">${esc(r.description || '')}</div><div class="rd" style="margin-top:8px">${r.primaryLanguage ? `<span class="dot" style="background:${esc(r.primaryLanguage.color||'#888')}"></span>${esc(r.primaryLanguage.name)} · ` : ''}★ ${r.stargazerCount} · ⑂ ${r.forkCount}</div></a>`).join('');
 
@@ -95,7 +120,7 @@ function render(s){
   $('foot').textContent = `Updated ${new Date(s.generatedAt).toLocaleString()} · GitHub API`;
 }
 
-const PANES = ['overview', 'activity', 'repos'];
+const PANES = ['overview', 'work', 'activity', 'repos'];
 const orgName = location.pathname.split('/')[1];
 const paneFromPath = () => { const p = location.pathname.split('/')[2]; return PANES.includes(p) ? p : 'overview'; };
 function showPane(p){
