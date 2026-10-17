@@ -25,8 +25,8 @@ const FONT = {
   4: '00010 00110 01010 10010 11111 00010 00010', 5: '11111 10000 11110 00001 00001 10001 01110',
   6: '00110 01000 10000 11110 10001 10001 01110', 7: '11111 00001 00010 00100 01000 01000 01000',
   8: '01110 10001 10001 01110 10001 10001 01110', 9: '01110 10001 10001 01111 00001 00010 01100',
-  '.': '00000 00000 00000 00000 00000 01100 01100', '-': '00000 00000 00000 11111 00000 00000 00000',
-  ',': '00000 00000 00000 00000 01100 00100 01000', '/': '00001 00010 00010 00100 01000 01000 10000', ' ': '00000 00000 00000 00000 00000 00000 00000',
+  '.': '00 00 00 00 00 11 11', '-': '00000 00000 00000 11111 00000 00000 00000',
+  ',': '00 00 00 00 11 01 10', '/': '00001 00010 00010 00100 01000 01000 10000', ' ': '000 000 000 000 000 000 000',
 };
 
 const crcTable = Array.from({ length: 256 }, (_, n) => {
@@ -57,8 +57,9 @@ function canvas() {
     for (const ch of String(str).toUpperCase()) {
       const g = (FONT[ch] || FONT[' ']).split(' ');
       g.forEach((row, r) => [...row].forEach((v, c) => v === '1' && rect(x + c * s, y + r * s, s, s, col)));
-      x += 6 * s;
+      x += (g[0].length + 1) * s;
     }
+    return x;
   };
   const png = () => {
     const raw = Buffer.alloc((W * 3 + 1) * H);
@@ -77,21 +78,23 @@ function renderOg(s) {
   c.text('GITHUB ACTIVITY / LAST YEAR', 70, 146, 4, MUTED);
 
   const stats = [
-    [s.year.total.toLocaleString('en-US'), 'CONTRIBUTIONS'],
-    [`${s.streak.current} D`, 'CURRENT STREAK'],
-    [`${s.streak.longest} D`, 'LONGEST STREAK'],
+    [s.year.total.toLocaleString('en-US'), '', 'CONTRIBUTIONS'],
+    [`${s.streak.current}`, 'DAYS', 'CURRENT STREAK'],
+    [`${s.streak.longest}`, 'DAYS', 'LONGEST STREAK'],
   ];
-  stats.forEach(([n, label], i) => {
+  stats.forEach(([n, unit, label], i) => {
     const x = 70 + i * 380;
-    c.text(n, x, 216, 8, TEXT);
+    const end = c.text(n, x, 216, 8, TEXT);
+    if (unit) c.text(unit, end + 8, 216 + 28, 4, MUTED);
     c.text(label, x, 284, 3, MUTED);
   });
 
   // contribution heatmap (last year)
   const days = s.year.days, max = Math.max(1, ...days.map((d) => d.count));
-  const cell = 16, gap = 4, first = days[0].weekday;
-  const cols = Math.ceil((days.length + first) / 7);
-  const x0 = Math.round((W - (cols * (cell + gap) - gap)) / 2), y0 = 350;
+  const first = days[0].weekday, cols = Math.ceil((days.length + first) / 7);
+  const gap = 4, left = 70, span = W - 2 * left;
+  const cell = Math.floor((span + gap) / cols) - gap;
+  const x0 = left + Math.round((span - (cols * (cell + gap) - gap)) / 2), y0 = 350;
   days.forEach((d, i) => {
     const lvl = d.count === 0 ? 0 : Math.min(4, Math.ceil(d.count / max * 4));
     c.rect(x0 + Math.floor((i + first) / 7) * (cell + gap), y0 + d.weekday * (cell + gap), cell, cell, LEVELS[lvl]);
