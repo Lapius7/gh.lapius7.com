@@ -389,7 +389,7 @@ http.createServer(async (req, res) => {
       }
     } catch (e) { console.error(e.message); }
   }
-  const rel = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname);
+  const rel = url.pathname === '/' || /^\/(overview|work|activity|repos)\/?$/.test(url.pathname) ? '/index.html' : decodeURIComponent(url.pathname);
   const file = path.join(PUBLIC, path.normalize(rel));
   if (!file.startsWith(PUBLIC + path.sep)) { res.writeHead(403); return res.end(); }
   fs.readFile(file, (err, buf) => {

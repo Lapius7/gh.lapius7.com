@@ -102,14 +102,18 @@
 <script>
 let repos = [];
 
+const PANES = ['overview', 'work', 'activity', 'repos'];
+const paneFromPath = () => { const p = location.pathname.replace(/\//g, ''); return PANES.includes(p) ? p : 'overview'; };
 function showPane(p){
   document.querySelectorAll('#ptabs button').forEach(b => b.classList.toggle('on', b.dataset.p === p));
   document.querySelectorAll('.pane').forEach(el => { el.hidden = el.dataset.p !== p; });
   if (p === 'overview' && typeof heatData !== 'undefined' && heatData) drawHeat(heatData.days, heatData.total, heatData.rolling);
 }
+addEventListener('popstate', () => showPane(paneFromPath()));
+showPane(paneFromPath());
 $('ptabs').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
-  showPane(b.dataset.p);
+  showPane(b.dataset.p); history.pushState(null, '', '/' + b.dataset.p);
 });
 
 // ---- render ----
