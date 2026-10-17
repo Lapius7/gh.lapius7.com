@@ -395,6 +395,10 @@ http.createServer(async (req, res) => {
   fs.readFile(file, (err, buf) => {
     if (err) { res.writeHead(404); return res.end('Not found'); }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
-    res.end(buf);
+    // OG image URL gets a fresh random query so crawlers never reuse a stale cache
+    const body = path.extname(file) === '.html'
+      ? buf.toString().replace(/\/og\.png"/g, `/og.png?v=${Math.random().toString(36).slice(2, 10)}"`)
+      : buf;
+    res.end(body);
   });
 }).listen(PORT, '127.0.0.1', () => console.log(`gh.lapius7.com on :${PORT}`));
