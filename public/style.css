@@ -135,3 +135,7 @@ a.item:hover .t{text-decoration:underline}
 
 .pill{display:inline-block;margin-left:4px;padding:0 6px;border-radius:999px;background:var(--line);color:var(--muted);font-size:11px;font-weight:400;line-height:17px;font-variant-numeric:tabular-nums}
 #gists .rn,.repo .rd{overflow-wrap:anywhere;text-wrap:pretty}
+
+.ptabs{gap:22px;font-size:14px;margin-bottom:28px;border-bottom:1px solid var(--line);overflow-x:auto}
+.ptabs button{padding:8px 0;margin-bottom:-1px;white-space:nowrap}
+.pane[hidden]{display:none}
