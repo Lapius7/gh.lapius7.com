@@ -109,9 +109,8 @@ function showPane(p){
 }
 $('ptabs').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
-  showPane(b.dataset.p); history.replaceState(null, '', '#' + b.dataset.p);
+  showPane(b.dataset.p);
 });
-addEventListener('load', () => { const h = location.hash.slice(1); if (document.querySelector(`#ptabs [data-p="${h}"]`)) showPane(h); });
 
 // ---- render ----
 let S = null;
