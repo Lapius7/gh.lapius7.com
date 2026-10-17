@@ -139,3 +139,6 @@ a.item:hover .t{text-decoration:underline}
 .ptabs{gap:22px;font-size:14px;margin-bottom:28px;border-bottom:1px solid var(--line);overflow-x:auto}
 .ptabs button{padding:8px 0;margin-bottom:-1px;white-space:nowrap}
 .pane[hidden]{display:none}
+.pager{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+.pager button{background:none;border:1px solid var(--line);border-radius:6px;color:var(--text);font:inherit;padding:4px 12px;cursor:pointer}
+.pager button:disabled{opacity:.4;cursor:default}

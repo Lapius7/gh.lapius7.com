@@ -16,7 +16,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://gh.lapius7.com/og.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232ecc8f'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/style.css?v=20261017b">
+<link rel="stylesheet" href="/style.css?v=20261017c">
 </head>
 <body class="loading">
 <div class="banner"><canvas id="bn"></canvas></div>
@@ -195,12 +195,21 @@ const stack = (parts) => { const t = parts.reduce((s,p) => s + p.v, 0) || 1;
   return [parts.map(p => `<i style="width:${p.v/t*100}%;background:${p.c}"></i>`).join(''),
           parts.map(p => `<span><span class="dot" style="background:${p.c}"></span>${esc(p.n)}<b>${p.label ?? (p.v/t*100).toFixed(1)+'%'}</b></span>`).join('')]; };
 
-function drawOpen(k){
+let openPage = 0, openKey = 'prs';
+const PER = 10;
+function drawOpen(k, page){
+  if (k !== openKey) openPage = 0;
+  openKey = k; if (page != null) openPage = page;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.k === k));
-  const o = S.open[k];
-  $('openlist').innerHTML = o.items.length ? o.items.map(i => `<a class="item" href="${esc(i.url)}" target="_blank" rel="noopener"><div><div class="t">${esc(i.title)}</div><div class="s">${esc(i.repo)}</div></div><div class="r">${ago(i.at)}</div></a>`).join('')
-      + (o.total > o.items.length ? `<div class="empty">+ ${o.total - o.items.length} more</div>` : '') : '<div class="empty">Nothing here</div>';
+  const o = S.open[k], pages = Math.max(1, Math.ceil(o.items.length / PER));
+  openPage = Math.min(openPage, pages - 1);
+  const rows = o.items.slice(openPage * PER, (openPage + 1) * PER);
+  $('openlist').innerHTML = rows.length ? rows.map(i => `<a class="item" href="${esc(i.url)}" target="_blank" rel="noopener"><div><div class="t">${esc(i.title)}</div><div class="s">${esc(i.repo)}</div></div><div class="r">${ago(i.at)}</div></a>`).join('')
+    + (pages > 1 ? `<div class="pager"><button data-d="-1"${openPage === 0 ? ' disabled' : ''}>Prev</button><span>${openPage + 1} / ${pages} · ${o.total} total</span><button data-d="1"${openPage >= pages - 1 ? ' disabled' : ''}>Next</button></div>` : '') : '<div class="empty">Nothing here</div>';
 }
+$('openlist').addEventListener('click', (e) => {
+  const b = e.target.closest('.pager button'); if (b && !b.disabled) drawOpen(openKey, openPage + Number(b.dataset.d));
+});
 
 function render(s){
   S = s;

@@ -45,9 +45,9 @@ query($login:String!, $cf:DateTime!, $ct:DateTime!, $pf:DateTime!, $pt:DateTime!
   }
   curMerged: search(query:$mCur, type:ISSUE) { issueCount }
   prevMerged: search(query:$mPrev, type:ISSUE) { issueCount }
-  openPrs: search(query:$qOpenPr, type:ISSUE, first:6) { issueCount nodes { ... on PullRequest { title url createdAt repository { nameWithOwner } } ... on Issue { title url createdAt repository { nameWithOwner } } } }
-  reviewReq: search(query:$qReview, type:ISSUE, first:6) { issueCount nodes { ... on PullRequest { title url createdAt repository { nameWithOwner } } ... on Issue { title url createdAt repository { nameWithOwner } } } }
-  openIssues: search(query:$qIssue, type:ISSUE, first:6) { issueCount nodes { ... on PullRequest { title url createdAt repository { nameWithOwner } } ... on Issue { title url createdAt repository { nameWithOwner } } } }
+  openPrs: search(query:$qOpenPr, type:ISSUE, first:100) { issueCount nodes { ... on PullRequest { title url createdAt repository { nameWithOwner } } ... on Issue { title url createdAt repository { nameWithOwner } } } }
+  reviewReq: search(query:$qReview, type:ISSUE, first:100) { issueCount nodes { ... on PullRequest { title url createdAt repository { nameWithOwner } } ... on Issue { title url createdAt repository { nameWithOwner } } } }
+  openIssues: search(query:$qIssue, type:ISSUE, first:100) { issueCount nodes { ... on PullRequest { title url createdAt repository { nameWithOwner } } ... on Issue { title url createdAt repository { nameWithOwner } } } }
 }
 fragment R on Repository { name description url stargazerCount forkCount primaryLanguage { name color } }
 fragment C on ContributionsCollection {
