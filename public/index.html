@@ -38,7 +38,7 @@
     <div class="row">
       <h2>Overview</h2>
       <div class="ctrls">
-        <select id="period" aria-label="Period"><option value="week">This week</option><option value="month">This month</option></select>
+        <select id="period" aria-label="Period"><option value="today">Today</option><option value="week">This week</option><option value="month">This month</option><option value="d30">Last 30 days</option><option value="quarter">This quarter</option><option value="year">This year</option></select>
         <select id="repo" aria-label="Repositories"><option value="">All repositories</option></select>
       </div>
     </div>
@@ -142,7 +142,7 @@ function drawStats(){
     : `<div class="stat"><div class="label">${l}</div><div class="num">${c[k].toLocaleString()}</div>${delta(c[k], p[k], S.compareLabel)}</div>`).join('');
 }
 
-let heatYear = '', heatData = null;
+let heatYear = String(new Date().getFullYear()), heatData = null;
 const DOWN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 function drawHeat(days, total, rolling){
   heatData = { days, total, rolling };
@@ -181,13 +181,12 @@ $('heat').addEventListener('mouseleave', () => { tip.style.opacity = 0; });
 
 function drawYears(){
   const y = new Date().getFullYear();
-  const opts = [['', 'Last year'], ...Array.from({ length: 5 }, (_, i) => [String(y - i), String(y - i)])];
+  const opts = Array.from({ length: 6 }, (_, i) => [String(y - i), String(y - i)]);
   $('years').innerHTML = opts.map(([v, l]) => `<button data-y="${v}" class="${v === heatYear ? 'on' : ''}">${l}</button>`).join('');
 }
 $('years').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
   heatYear = b.dataset.y; drawYears();
-  if (!heatYear) return drawHeat(S.year.days, S.year.total, true);
   try { const y = await getJSON('/api/year?y=' + heatYear); if (heatYear === b.dataset.y) drawHeat(y.days, y.total, false); } catch {}
 });
 
@@ -233,7 +232,7 @@ function render(s){
   drawStats();
 
   drawYears();
-  if (!heatYear) drawHeat(s.year.days, s.year.total, true);
+  const hy = heatYear; getJSON('/api/year?y=' + hy).then((y) => { if (heatYear === hy) drawHeat(y.days, y.total, false); }).catch(() => { if (heatYear === hy) drawHeat(s.year.days, s.year.total, true); });
 
   const [yy, mm] = s.bestMonth.month.split('-');
   $('extra').innerHTML = [
@@ -290,8 +289,8 @@ const idle = (fn) => (window.requestIdleCallback ? requestIdleCallback(fn, { tim
 function prefetch(s){
   idle(() => {
     const y = new Date().getFullYear();
-    const urls = [...['week', 'month'].map((p) => '/api/stats?period=' + p),
-      ...Array.from({ length: 5 }, (_, i) => '/api/year?y=' + (y - i)),
+    const urls = [...['today', 'week', 'month', 'd30', 'quarter', 'year'].map((p) => '/api/stats?period=' + p),
+      ...Array.from({ length: 6 }, (_, i) => '/api/year?y=' + (y - i)),
       ...s.user.orgs.map((o) => '/api/org?name=' + encodeURIComponent(o.login))];
     urls.forEach((u) => getJSON(u).catch(() => {}));
   });

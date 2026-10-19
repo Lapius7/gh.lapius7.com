@@ -63,22 +63,19 @@ fragment C on ContributionsCollection {
 const iso = (d) => d.toISOString();
 const ymd = (d) => d.toISOString().slice(0, 10);
 
+const PERIODS = ['today', 'week', 'month', 'd30', 'quarter', 'year'];
 function ranges(period, now) {
-  const y = now.getUTCFullYear(), m = now.getUTCMonth();
-  if (period === 'month') {
-    return {
-      cf: new Date(Date.UTC(y, m, 1)), ct: now,
-      pf: new Date(Date.UTC(y, m - 1, 1)), pt: new Date(Date.UTC(y, m, 1) - 1000),
-      label: 'last month',
-    };
+  const y = now.getUTCFullYear(), m = now.getUTCMonth(), d = now.getUTCDate();
+  const U = (yy, mm, dd) => new Date(Date.UTC(yy, mm, dd));
+  const prev = (cf, pf, label) => ({ cf, ct: now, pf, pt: new Date(cf.getTime() - 1000), label });
+  switch (period) {
+    case 'today': { const t = U(y, m, d); return prev(t, U(y, m, d - 1), 'yesterday'); }
+    case 'month': return prev(U(y, m, 1), U(y, m - 1, 1), 'last month');
+    case 'd30': { const t = U(y, m, d); return prev(U(y, m, d - 29), U(y, m, d - 59), 'previous 30 days'); }
+    case 'quarter': { const q = Math.floor(m / 3) * 3; return prev(U(y, q, 1), U(y, q - 3, 1), 'last quarter'); }
+    case 'year': return prev(U(y, 0, 1), U(y - 1, 0, 1), 'last year');
+    default: { const dow = (now.getUTCDay() + 6) % 7; const mon = U(y, m, d - dow); return prev(mon, new Date(mon.getTime() - 7 * 864e5), 'last week'); }
   }
-  const dow = (now.getUTCDay() + 6) % 7; // Monday = 0
-  const mon = new Date(Date.UTC(y, m, now.getUTCDate() - dow));
-  return {
-    cf: mon, ct: now,
-    pf: new Date(mon.getTime() - 7 * 864e5), pt: new Date(mon.getTime() - 1000),
-    label: 'last week',
-  };
 }
 
 // Streak that ignores empty weekend days (Sat/Sun).
@@ -336,7 +333,7 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/api/stats') {
-    const period = url.searchParams.get('period') === 'month' ? 'month' : 'week';
+    const period = PERIODS.includes(url.searchParams.get('period')) ? url.searchParams.get('period') : 'week';
     try {
       const v = await getStats(period);
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, stale-while-revalidate=600' });
@@ -402,7 +399,7 @@ http.createServer(async (req, res) => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function warm() {
   const y = new Date().getUTCFullYear();
-  const jobs = [() => getStats('week'), () => getStats('month'), ...Array.from({ length: 5 }, (_, i) => () => getYear(y - i)),
+  const jobs = [...PERIODS.map((p) => () => getStats(p)), ...Array.from({ length: 6 }, (_, i) => () => getYear(y - i)),
     async () => { for (const o of await getOrgNames()) { await getOrg(o.login).catch((e) => console.error('warm org', e.message)); await sleep(500); } }];
   for (const j of jobs) { try { await j(); } catch (e) { console.error('warm:', e.message); } await sleep(500); }
 }
