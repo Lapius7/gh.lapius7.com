@@ -188,7 +188,7 @@ $('years').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
   heatYear = b.dataset.y; drawYears();
   if (!heatYear) return drawHeat(S.year.days, S.year.total, true);
-  try { const y = await (await fetch('/api/year?y=' + heatYear)).json(); drawHeat(y.days, y.total, false); } catch {}
+  try { const y = await getJSON('/api/year?y=' + heatYear); if (heatYear === b.dataset.y) drawHeat(y.days, y.total, false); } catch {}
 });
 
 const bars = (vals, labels) => { const m = Math.max(1, ...vals); const hi = vals.indexOf(Math.max(...vals));
@@ -283,11 +283,23 @@ function drawRepos(){
     || '<div class="rd" style="padding:12px 0">No match</div>';
 }
 
+// Responses are kept per URL for the page's lifetime; prefetch fills them while the browser is idle.
+const jcache = new Map();
+const getJSON = (u) => { if (!jcache.has(u)) setTimeout(() => jcache.delete(u), 300000), jcache.set(u, fetch(u).then((r) => { if (!r.ok) throw 0; return r.json(); }).catch((e) => { jcache.delete(u); throw e; })); return jcache.get(u); };
+const idle = (fn) => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 3000 }) : setTimeout(fn, 800));
+function prefetch(s){
+  idle(() => {
+    const y = new Date().getFullYear();
+    const urls = [...['week', 'month'].map((p) => '/api/stats?period=' + p),
+      ...Array.from({ length: 5 }, (_, i) => '/api/year?y=' + (y - i)),
+      ...s.user.orgs.map((o) => '/api/org?name=' + encodeURIComponent(o.login))];
+    urls.forEach((u) => getJSON(u).catch(() => {}));
+  });
+}
 async function load(){
   try {
-    const r = await fetch('/api/stats?period=' + $('period').value);
-    if (!r.ok) throw 0;
-    render(await r.json());
+    const s = await getJSON('/api/stats?period=' + $('period').value);
+    render(s); prefetch(s);
   } catch { document.body.classList.remove('loading'); $('app').classList.remove('skeleton'); $('app').insertAdjacentHTML('afterbegin', '<div class="err">Failed to load GitHub data.</div>'); }
 }
 $('period').onchange = () => { document.querySelector('.err')?.remove(); load(); };

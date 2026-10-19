@@ -139,7 +139,12 @@ $('q').oninput = drawRepos;
   try {
     const r = await fetch('/api/org?name=' + encodeURIComponent(name));
     if (!r.ok) throw 0;
-    render(await r.json());
+    const o = await r.json();
+    render(o);
+    // Warm the browser cache for the other pages reachable from here.
+    (window.requestIdleCallback || setTimeout)(() => {
+      ['/api/stats?period=week', ...(o.orgNames || []).filter((n) => n.login.toLowerCase() !== name.toLowerCase()).map((n) => '/api/org?name=' + encodeURIComponent(n.login))].forEach((u) => fetch(u).catch(() => {}));
+    });
   } catch { document.body.classList.remove('loading'); $('app').classList.remove('skeleton'); $('app').insertAdjacentHTML('afterbegin', '<div class="err">Failed to load organization.</div>'); }
 })();
 </script>

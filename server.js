@@ -15,9 +15,9 @@ function loadEnv() {
 loadEnv();
 
 const { GH_TOKEN, GH_USER = 'Lapius7', PORT = 8420 } = process.env;
+const { cached } = require('./cache');
 const PUBLIC = path.join(__dirname, 'public');
 const TTL = 5 * 60 * 1000;
-const cache = new Map();
 
 const QUERY = `
 query($login:String!, $cf:DateTime!, $ct:DateTime!, $pf:DateTime!, $pt:DateTime!, $yf:DateTime!, $yt:DateTime!,
@@ -250,10 +250,10 @@ async function buildStats(period) {
   };
 }
 
-const yearCache = new Map();
-async function getYear(y) {
-  const hit = yearCache.get(y);
-  if (hit && Date.now() - hit.t < 60 * TTL) return hit.v;
+// A past year no longer changes once GitHub has settled it (a few days after Dec 31): kept forever.
+const yearFinal = (v) => Date.now() > Date.UTC(v.year + 1, 0, 8);
+const getYear = (y) => cached('year:' + y, 60 * TTL, () => buildYear(y), yearFinal);
+async function buildYear(y) {
   const now = new Date();
   const from = new Date(Date.UTC(y, 0, 1));
   const to = y === now.getUTCFullYear() ? now : new Date(Date.UTC(y, 11, 31, 23, 59, 59));
@@ -261,26 +261,19 @@ async function getYear(y) {
     { l: GH_USER, f: iso(from), t: iso(to) });
   const cal = d.user.contributionsCollection.contributionCalendar;
   const v = { year: y, total: cal.totalContributions, days: toDays(cal) };
-  yearCache.set(y, { t: Date.now(), v });
   return v;
 }
 
-async function getStats(period) {
-  const hit = cache.get(period);
-  if (hit && Date.now() - hit.t < TTL) return hit.v;
-  const v = await buildStats(period);
-  cache.set(period, { t: Date.now(), v });
-  return v;
-}
+const getStats = (period) => cached('stats:' + period, TTL, () => buildStats(period));
 
 
 // ---- organizations ----
-const orgCache = new Map();
-let orgList = { t: 0, v: [], me: null };
+let orgList = { v: [], me: null };
 async function getOrgNames() {
-  if (Date.now() - orgList.t < 60 * TTL && orgList.v.length) return orgList.v;
-  const d = await gql(`query($l:String!){user(login:$l){login avatarUrl organizations(first:30){nodes{login avatarUrl}}}}`, { l: GH_USER });
-  orgList = { t: Date.now(), v: d.user.organizations.nodes, me: { login: d.user.login, avatarUrl: d.user.avatarUrl } };
+  orgList = await cached('orgs', 60 * TTL, async () => {
+    const d = await gql(`query($l:String!){user(login:$l){login avatarUrl organizations(first:30){nodes{login avatarUrl}}}}`, { l: GH_USER });
+  return { v: d.user.organizations.nodes, me: { login: d.user.login, avatarUrl: d.user.avatarUrl } };
+  });
   return orgList.v;
 }
 
@@ -334,13 +327,8 @@ async function buildOrg(login) {
   };
 }
 
-async function getOrg(login) {
-  const hit = orgCache.get(login);
-  if (hit && Date.now() - hit.t < TTL) return hit.v;
-  const v = await buildOrg(login);
-  orgCache.set(login, { t: Date.now(), v });
-  return v;
-}
+const ORG_TTL = 3 * TTL;
+const getOrg = (login) => cached('org:' + login, ORG_TTL, () => buildOrg(login));
 
 let ogCache = null;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
@@ -351,7 +339,7 @@ http.createServer(async (req, res) => {
     const period = url.searchParams.get('period') === 'month' ? 'month' : 'week';
     try {
       const v = await getStats(period);
-      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60' });
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, stale-while-revalidate=600' });
       res.end(JSON.stringify(v));
     } catch (e) {
       console.error(e.message);
@@ -371,7 +359,7 @@ http.createServer(async (req, res) => {
     const y = +url.searchParams.get('y');
     if (!(y >= 2008 && y <= new Date().getUTCFullYear())) { res.writeHead(400); return res.end(); }
     try {
-      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' });
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300, stale-while-revalidate=3600' });
       return res.end(JSON.stringify(await getYear(y)));
     } catch (e) { console.error(e.message); res.writeHead(502); return res.end(); }
   }
@@ -380,7 +368,7 @@ http.createServer(async (req, res) => {
       const want = (url.searchParams.get('name') || '').toLowerCase();
       const login = (await getOrgNames()).find((n) => n.login.toLowerCase() === want)?.login;
       if (!login) { res.writeHead(404, { 'Content-Type': 'application/json' }); return res.end('{"error":"not_found"}'); }
-      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60' });
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, stale-while-revalidate=600' });
       return res.end(JSON.stringify({ ...(await getOrg(login)), orgNames: await getOrgNames(), me: orgList.me }));
     } catch (e) { console.error(e.message); res.writeHead(502, { 'Content-Type': 'application/json' }); return res.end('{"error":"upstream_error"}'); }
   }
@@ -404,4 +392,17 @@ http.createServer(async (req, res) => {
       : buf;
     res.end(body);
   });
-}).listen(PORT, '127.0.0.1', () => console.log(`gh.lapius7.com on :${PORT}`));
+}).listen(PORT, '127.0.0.1', () => {
+  console.log(`gh.lapius7.com on :${PORT}`);
+  warm();
+  setInterval(warm, TTL - 30 * 1000).unref();
+});
+
+// Keep every view's cache hot so visitors never wait on GitHub. Cheap when fresh; staggered when not.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function warm() {
+  const y = new Date().getUTCFullYear();
+  const jobs = [() => getStats('week'), () => getStats('month'), ...Array.from({ length: 5 }, (_, i) => () => getYear(y - i)),
+    async () => { for (const o of await getOrgNames()) { await getOrg(o.login).catch((e) => console.error('warm org', e.message)); await sleep(500); } }];
+  for (const j of jobs) { try { await j(); } catch (e) { console.error('warm:', e.message); } await sleep(500); }
+}
