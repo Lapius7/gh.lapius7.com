@@ -71,7 +71,7 @@ function ranges(period, now) {
   switch (period) {
     case 'today': { const t = U(y, m, d); return prev(t, U(y, m, d - 1), 'yesterday'); }
     case 'month': return prev(U(y, m, 1), U(y, m - 1, 1), 'last month');
-    case 'd30': { const t = U(y, m, d); return prev(U(y, m, d - 29), U(y, m, d - 59), 'previous 30 days'); }
+    case 'd30': { const t = U(y, m, d); return prev(U(y, m, d - 29), U(y, m, d - 59), 'prev 30 days'); }
     case 'quarter': { const q = Math.floor(m / 3) * 3; return prev(U(y, q, 1), U(y, q - 3, 1), 'last quarter'); }
     case 'year': return prev(U(y, 0, 1), U(y - 1, 0, 1), 'last year');
     default: { const dow = (now.getUTCDay() + 6) % 7; const mon = U(y, m, d - dow); return prev(mon, new Date(mon.getTime() - 7 * 864e5), 'last week'); }
