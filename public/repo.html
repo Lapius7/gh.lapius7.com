@@ -16,7 +16,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="__IMG__">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232ecc8f'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/style.css?v=20261103b">
+<link rel="stylesheet" href="/style.css?v=20261103c">
 </head>
 <body class="loading">
 <div class="banner"><canvas id="bn"></canvas></div>
@@ -80,6 +80,17 @@
         list.map((t) => `<a class="item" href="#" data-${t.d ? 'd' : 'f'}="${esc(t.p)}"><div class="t">${t.d ? '▸ ' : ''}${esc(t.p.split('/').pop())}</div><div class="r">${t.d ? '' : fmt(t.s)}</div></a>`).join('') || '<div class="empty">Empty</div>';
       $('viewer').innerHTML = '';
     };
+    const EXT = { ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript', json: 'json', css: 'css', scss: 'scss', html: 'xml', xml: 'xml', svg: 'xml', py: 'python', rs: 'rust', go: 'go', sh: 'bash', bash: 'bash', zsh: 'bash', md: 'markdown', yml: 'yaml', yaml: 'yaml', toml: 'ini', ini: 'ini', java: 'java', kt: 'kotlin', c: 'c', h: 'c', cpp: 'cpp', cs: 'csharp', php: 'php', rb: 'ruby', sql: 'sql', lua: 'lua', swift: 'swift', ps1: 'powershell', vue: 'xml', nsi: 'ini', dockerfile: 'dockerfile' };
+    let hlp;
+    const hl = async (el, p) => {
+      const base = p.split('/').pop().toLowerCase(), lang = EXT[base.includes('.') ? base.split('.').pop() : base];
+      if (!lang || el.textContent.length > 120000) return;
+      try {
+        hlp ||= import('https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/+esm');
+        const m = (await hlp).default;
+        el.innerHTML = m.highlight(el.textContent, { language: lang, ignoreIllegals: true }).value;
+      } catch {}
+    };
     const open = async (p) => {
       $('viewer').innerHTML = '<div class="empty">Loading…</div>';
       try {
@@ -89,6 +100,7 @@
         if (f.text == null) { $('viewer').innerHTML = head + `<div class="empty">Binary or large file (${fmt(f.size)})</div>`; return; }
         const lines = f.text.replace(/\n$/, '').split('\n');
         $('viewer').innerHTML = head + `<pre class="code"><span class="ln">${lines.map((_, i) => i + 1).join('\n')}</span><code>${esc(f.text)}</code></pre>`;
+        hl($('viewer').querySelector('code'), p);
         $('viewer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       } catch { $('viewer').innerHTML = '<div class="empty">Failed to load</div>'; }
     };

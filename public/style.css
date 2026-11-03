@@ -171,3 +171,13 @@ a.item:hover .t{text-decoration:underline}
 .md table{border-collapse:collapse;display:block;overflow:auto}.md th,.md td{border:1px solid var(--line);padding:5px 10px}
 .md hr{border:0;border-top:1px solid var(--line);margin:20px 0}
 section.blk[hidden]{display:none}
+
+.code{--c1:#cf222e;--c2:#0550ae;--c3:#116329;--c4:#8250df;--c5:#6e7781;--c6:#953800}
+:root:not([data-theme="light"]) .code{--c1:#ff7b72;--c2:#79c0ff;--c3:#7ee787;--c4:#d2a8ff;--c5:#8b949e;--c6:#ffa657}
+.hljs-keyword,.hljs-doctag,.hljs-template-tag,.hljs-selector-tag,.hljs-type{color:var(--c1)}
+.hljs-title,.hljs-title.function_,.hljs-title.class_{color:var(--c4)}
+.hljs-number,.hljs-literal,.hljs-attr,.hljs-attribute,.hljs-variable,.hljs-property,.hljs-selector-class,.hljs-selector-id,.hljs-meta{color:var(--c2)}
+.hljs-string,.hljs-regexp,.hljs-symbol,.hljs-bullet,.hljs-addition{color:var(--c3)}
+.hljs-comment,.hljs-quote{color:var(--c5);font-style:italic}
+.hljs-built_in,.hljs-name,.hljs-tag,.hljs-params,.hljs-subst{color:var(--c6)}
+.hljs-deletion{color:var(--c1)}
