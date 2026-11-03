@@ -16,7 +16,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="__IMG__">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232ecc8f'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/style.css?v=20261103a">
+<link rel="stylesheet" href="/style.css?v=20261103b">
 </head>
 <body class="loading">
 <div class="banner"><canvas id="bn"></canvas></div>
@@ -32,7 +32,10 @@
       <div class="topics" id="topics"></div>
       <div class="acts" id="acts"></div>
     </header>
+    <section class="blk" id="contribBlk"><h2>Contributors</h2><div class="avs" id="contribs"></div></section>
     <section class="blk"><h2>Languages</h2><div class="stack" id="stack"></div><div class="key" id="key"></div></section>
+    <section class="blk"><h2>Source</h2><div class="crumbp" id="crumb"></div><div id="files"></div><div id="viewer"></div></section>
+    <section class="blk" id="readmeBlk"><h2>README</h2><article class="md" id="readme"></article></section>
     <section class="blk"><h2>Recent commits</h2><div id="commits"></div></section>
     <p class="foot2" id="foot"></p>
   </div>
@@ -62,6 +65,36 @@
     const tot = d.languages.reduce((a, l) => a + l.bytes, 0) || 1;
     $('stack').innerHTML = d.languages.map((l) => `<i style="width:${l.bytes / tot * 100}%;background:${esc(l.color)}"></i>`).join('');
     $('key').innerHTML = d.languages.map((l) => `<span><i class="dot" style="background:${esc(l.color)}"></i>${esc(l.name)}<b>${(l.bytes / tot * 100).toFixed(1)}%</b></span>`).join('');
+    $('contribs').innerHTML = d.contributors.map((c) => `<a class="av" href="${esc(c.url)}" target="_blank" rel="noopener" title="${esc(c.login)} · ${c.n}"><img src="${esc(c.avatar)}&s=64" alt=""><span>${esc(c.login)}</span><b>${n(c.n)}</b></a>`).join('');
+    if (!d.contributors.length) $('contribBlk').hidden = true;
+    if (d.readme) $('readme').innerHTML = d.readme; else $('readmeBlk').hidden = true;
+    // ---- source browser ----
+    const full = d.owner + '/' + d.name, kids = {};
+    d.tree.forEach((t) => { const i = t.p.lastIndexOf('/'); (kids[i < 0 ? '' : t.p.slice(0, i)] ||= []).push(t); });
+    const fmt = (b) => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(1) + ' MB';
+    const go = (dir) => {
+      const parts = dir ? dir.split('/') : [];
+      $('crumb').innerHTML = `<a href="#" data-d="">${esc(d.name)}</a>` + parts.map((x, i) => ` / <a href="#" data-d="${esc(parts.slice(0, i + 1).join('/'))}">${esc(x)}</a>`).join('');
+      const list = (kids[dir] || []).slice().sort((a, b) => b.d - a.d || a.p.localeCompare(b.p));
+      $('files').innerHTML = (dir ? `<a class="item" href="#" data-d="${esc(parts.slice(0, -1).join('/'))}"><div class="t">..</div></a>` : '') +
+        list.map((t) => `<a class="item" href="#" data-${t.d ? 'd' : 'f'}="${esc(t.p)}"><div class="t">${t.d ? '▸ ' : ''}${esc(t.p.split('/').pop())}</div><div class="r">${t.d ? '' : fmt(t.s)}</div></a>`).join('') || '<div class="empty">Empty</div>';
+      $('viewer').innerHTML = '';
+    };
+    const open = async (p) => {
+      $('viewer').innerHTML = '<div class="empty">Loading…</div>';
+      try {
+        const f = await (await fetch(`/api/repo-file?name=${encodeURIComponent(full)}&path=${encodeURIComponent(p)}&ref=${encodeURIComponent(d.defaultBranch)}`)).json();
+        const gh = `${d.url}/blob/${encodeURIComponent(d.defaultBranch)}/${p.split('/').map(encodeURIComponent).join('/')}`;
+        const head = `<div class="fhead"><b>${esc(p)}</b><a href="${esc(gh)}" target="_blank" rel="noopener">GitHub ↗</a></div>`;
+        if (f.text == null) { $('viewer').innerHTML = head + `<div class="empty">Binary or large file (${fmt(f.size)})</div>`; return; }
+        const lines = f.text.replace(/\n$/, '').split('\n');
+        $('viewer').innerHTML = head + `<pre class="code"><span class="ln">${lines.map((_, i) => i + 1).join('\n')}</span><code>${esc(f.text)}</code></pre>`;
+        $('viewer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } catch { $('viewer').innerHTML = '<div class="empty">Failed to load</div>'; }
+    };
+    $('files').onclick = $('crumb').onclick = (e) => { const a = e.target.closest('a[data-d],a[data-f]'); if (!a) return; e.preventDefault(); a.dataset.f != null ? open(a.dataset.f) : go(a.dataset.d); };
+    go('');
+    if (d.treeCut) $('files').insertAdjacentHTML('afterend', '<div class="empty">File list truncated</div>');
     $('commits').innerHTML = d.commits.map((c) => `<a class="item" href="${esc(c.url)}" target="_blank" rel="noopener"><div><div class="t">${esc(c.message)}</div><div class="s">${esc(c.author)}</div></div><div class="r">${ago(c.date)}</div></a>`).join('') || '<div class="empty">No commits</div>';
     $('foot').textContent = `Created ${new Date(d.createdAt).toLocaleDateString()} · ${d.defaultBranch}`;
     $('app').hidden = false;

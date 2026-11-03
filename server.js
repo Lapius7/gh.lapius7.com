@@ -328,11 +328,38 @@ async function buildOrg(login) {
 }
 
 const ORG_TTL = 3 * TTL;
+async function ghHtml(p) {
+  const r = await fetch('https://api.github.com' + p, { headers: { Authorization: `bearer ${GH_TOKEN}`, Accept: 'application/vnd.github.html+json', 'User-Agent': 'gh.lapius7.com' } });
+  if (!r.ok) throw new Error(`${r.status} ${p}`);
+  return r.text();
+}
+// GitHub が整形済みの README HTML を返す。念のため script/イベント属性を除き、相対リンクを絶対化する
+function fixReadme(h, owner, name, br) {
+  const raw = `https://raw.githubusercontent.com/${owner}/${name}/${br}/`, web = `https://github.com/${owner}/${name}/blob/${br}/`;
+  const abs = (u, base) => /^(?:[a-z][a-z0-9+.-]*:|\/\/|#|\/)/i.test(u) ? (u.startsWith('/') && !u.startsWith('//') ? 'https://github.com' + u : u) : base + u.replace(/^\.\//, '');
+  return h.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son\w+\s*=\s*("[^"]*"|'[^']*')/gi, '').replace(/javascript:/gi, '')
+    .replace(/<a ([^>]*?)href="([^"]*)"/g, (m, a, u) => `<a ${a}target="_blank" rel="noopener" href="${abs(u, web)}"`)
+    .replace(/<img ([^>]*?)src="([^"]*)"/g, (m, a, u) => `<img ${a}loading="lazy" src="${abs(u, raw)}"`)
+    .replace(/<a[^>]*class="anchor"[^>]*>[\s\S]*?<\/a>/g, '');
+}
+const getFile = (owner, name, ref, p) => cached(`file:${owner}/${name}@${ref}:${p}`.toLowerCase(), 30 * 60 * 1000, async () => {
+  const j = await rest(`/repos/${owner}/${name}/contents/${p.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(ref)}`);
+  if (Array.isArray(j) || j.type !== 'file') throw new Error('not file');
+  if (j.size > 300000) return { size: j.size, text: null };
+  const buf = Buffer.from(j.content || '', 'base64');
+  if (buf.includes(0)) return { size: j.size, text: null };
+  return { size: j.size, text: buf.toString('utf8') };
+});
+
 const LANG_COLORS = { JavaScript: '#f1e05a', TypeScript: '#3178c6', Python: '#3572A5', HTML: '#e34c26', CSS: '#563d7c', Shell: '#89e051', Go: '#00ADD8', Rust: '#dea584', Java: '#b07219', Vue: '#41b883', SCSS: '#c6538c', Dockerfile: '#384d54', 'C#': '#178600', C: '#555555', 'C++': '#f34b7d', Kotlin: '#A97BFF', Swift: '#F05138', PHP: '#4F5D95', Lua: '#000080', PowerShell: '#012456' };
 const getRepoPage = (owner, name) => cached(`repopage:${owner}/${name}`.toLowerCase(), 10 * 60 * 1000, async () => {
   const base = `/repos/${owner}/${name}`;
-  const [r, langs, commits, rel] = await Promise.all([
-    rest(base), rest(base + '/languages').catch(() => ({})), rest(base + '/commits?per_page=6').catch(() => []), rest(base + '/releases/latest').catch(() => null),
+  const r = await rest(base);
+  const [langs, commits, rel, contribs, tree, readme] = await Promise.all([
+    rest(base + '/languages').catch(() => ({})), rest(base + '/commits?per_page=6').catch(() => []), rest(base + '/releases/latest').catch(() => null),
+    rest(base + '/contributors?per_page=24').catch(() => []),
+    rest(`${base}/git/trees/${encodeURIComponent(r.default_branch)}?recursive=1`).catch(() => ({ tree: [] })),
+    ghHtml(base + '/readme').catch(() => null),
   ]);
   return {
     owner: r.owner.login, name: r.name, description: r.description, url: r.html_url, homepage: r.homepage || '', language: r.language, langColor: LANG_COLORS[r.language] || '#888',
@@ -341,6 +368,10 @@ const getRepoPage = (owner, name) => cached(`repopage:${owner}/${name}`.toLowerC
     languages: Object.entries(langs).map(([k, v]) => ({ name: k, bytes: v, color: LANG_COLORS[k] || '#888' })),
     commits: commits.map((c) => ({ message: c.commit.message.split('\n')[0], author: c.author?.login || c.commit.author.name, date: c.commit.author.date, url: c.html_url })),
     release: rel ? { tag: rel.tag_name, url: rel.html_url } : null,
+    contributors: (Array.isArray(contribs) ? contribs : []).map((c) => ({ login: c.login, avatar: c.avatar_url, url: c.html_url, n: c.contributions })),
+    tree: (tree.tree || []).slice(0, 4000).map((t) => ({ p: t.path, d: t.type === 'tree' ? 1 : 0, s: t.size || 0 })),
+    treeCut: !!tree.truncated || (tree.tree || []).length > 4000,
+    readme: readme ? fixReadme(readme, owner, name, r.default_branch) : '',
   };
 });
 const getOrg = (login) => cached('org:' + login, ORG_TTL, () => buildOrg(login));
@@ -386,6 +417,16 @@ http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, stale-while-revalidate=600' });
       return res.end(JSON.stringify({ ...(await getOrg(login)), orgNames: await getOrgNames(), me: orgList.me }));
     } catch (e) { console.error(e.message); res.writeHead(502, { 'Content-Type': 'application/json' }); return res.end('{"error":"upstream_error"}'); }
+  }
+  if (url.pathname === '/api/repo-file') {
+    try {
+      const [owner, name] = (url.searchParams.get('name') || '').split('/');
+      const p = url.searchParams.get('path') || '', ref = url.searchParams.get('ref') || '';
+      const okOwner = owner && (owner.toLowerCase() === GH_USER.toLowerCase() || (await getOrgNames()).some((n) => n.login.toLowerCase() === owner.toLowerCase()));
+      if (!okOwner || !/^[A-Za-z0-9._-]+$/.test(name || '') || !p || p.includes('..') || !/^[A-Za-z0-9._\/-]+$/.test(ref)) { res.writeHead(400); return res.end(); }
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' });
+      return res.end(JSON.stringify(await getFile(owner, name, ref, p)));
+    } catch (e) { res.writeHead(404); return res.end(); }
   }
   if (url.pathname === '/api/repo' || /^\/repos\/[^/]+(?:\/[^/]+)?\/?$/.test(url.pathname)) {
     try {
