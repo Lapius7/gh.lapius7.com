@@ -36,6 +36,9 @@ query($login:String!, $cf:DateTime!, $ct:DateTime!, $pf:DateTime!, $pt:DateTime!
       totalCommitContributions totalIssueContributions totalPullRequestContributions totalPullRequestReviewContributions
       contributionCalendar { totalContributions weeks { contributionDays { date contributionCount weekday } } }
     }
+    allRepos: repositories(first:100, ownerAffiliations:OWNER, privacy:PUBLIC, orderBy:{field:PUSHED_AT, direction:DESC}) {
+      nodes { ...R pushedAt }
+    }
     recent: repositories(first:12, ownerAffiliations:OWNER, privacy:PUBLIC, orderBy:{field:PUSHED_AT, direction:DESC}) {
       nodes { ...R pushedAt owner { login } defaultBranchRef { target { ... on Commit { history(first:3) { nodes { messageHeadline committedDate url } } } } } }
     }
@@ -240,7 +243,7 @@ async function buildStats(period) {
       id: g.name, url: g.url, description: g.description, pushedAt: g.pushedAt, stars: g.stargazerCount,
       files: g.files.map((f) => ({ name: f.name, lang: f.language && f.language.name, color: f.language && f.language.color })),
     })),
-    repos: u.recent.nodes,
+    repos: u.allRepos.nodes,
     open: { prs: { total: data.openPrs.issueCount, items: list(data.openPrs) }, reviews: { total: data.reviewReq.issueCount, items: list(data.reviewReq) }, issues: { total: data.openIssues.issueCount, items: list(data.openIssues) } },
     events: feed, runs,
     generatedAt: now.toISOString(),
