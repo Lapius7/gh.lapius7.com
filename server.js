@@ -355,6 +355,7 @@ const LANG_COLORS = { JavaScript: '#f1e05a', TypeScript: '#3178c6', Python: '#35
 const getRepoPage = (owner, name) => cached(`repopage:${owner}/${name}`.toLowerCase(), 10 * 60 * 1000, async () => {
   const base = `/repos/${owner}/${name}`;
   const r = await rest(base);
+  if (r.private) throw new Error('private');
   const [langs, commits, rel, contribs, tree, readme] = await Promise.all([
     rest(base + '/languages').catch(() => ({})), rest(base + '/commits?per_page=6').catch(() => []), rest(base + '/releases/latest').catch(() => null),
     rest(base + '/contributors?per_page=24').catch(() => []),
@@ -424,6 +425,7 @@ http.createServer(async (req, res) => {
       const p = url.searchParams.get('path') || '', ref = url.searchParams.get('ref') || '';
       const okOwner = owner && (owner.toLowerCase() === GH_USER.toLowerCase() || (await getOrgNames()).some((n) => n.login.toLowerCase() === owner.toLowerCase()));
       if (!okOwner || !/^[A-Za-z0-9._-]+$/.test(name || '') || !p || p.includes('..') || !/^[A-Za-z0-9._\/-]+$/.test(ref)) { res.writeHead(400); return res.end(); }
+      await getRepoPage(owner, name);
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' });
       return res.end(JSON.stringify(await getFile(owner, name, ref, p)));
     } catch (e) { res.writeHead(404); return res.end(); }
