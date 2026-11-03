@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__ · GitHub</title>
+<meta name="description" content="__DESC__">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Lapius7 · GitHub">
+<meta property="og:title" content="__TITLE__">
+<meta property="og:description" content="__DESC__">
+<meta property="og:url" content="__URL__">
+<meta property="og:image" content="__IMG__">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="600">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="__IMG__">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232ecc8f'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css?v=20261103a">
+</head>
+<body class="loading">
+<div class="banner"><canvas id="bn"></canvas></div>
+<button class="theme" id="theme" aria-label="Toggle theme">◐</button>
+<main class="wrap">
+  <div id="loader" role="status" aria-live="polite"><div class="wave" aria-hidden="true"></div><span>Loading repository<b class="dots"></b></span></div>
+  <div id="app" hidden>
+    <a class="back" href="/repos">← Repositories</a>
+    <header class="rhead">
+      <h1 id="rname"></h1>
+      <p class="rdesc" id="rdesc"></p>
+      <div class="chips" id="chips"></div>
+      <div class="topics" id="topics"></div>
+      <div class="acts" id="acts"></div>
+    </header>
+    <section class="blk"><h2>Languages</h2><div class="stack" id="stack"></div><div class="key" id="key"></div></section>
+    <section class="blk"><h2>Recent commits</h2><div id="commits"></div></section>
+    <p class="foot2" id="foot"></p>
+  </div>
+  <div class="err" id="err" hidden>Repository not found</div>
+</main>
+<script src="/common.js"></script>
+<script>
+(async () => {
+  const p = location.pathname.replace(/^\/repos\//, '').split('/').filter(Boolean);
+  try {
+    const r = await fetch('/api/repo?name=' + encodeURIComponent(p.join('/')));
+    if (!r.ok) throw 0;
+    const d = await r.json();
+    $('rname').innerHTML = `<span>${esc(d.owner)}/</span>${esc(d.name)}`;
+    $('rdesc').textContent = d.description || '';
+    const n = (x) => Number(x).toLocaleString();
+    $('chips').innerHTML = [
+      d.language && `<span class="chip"><i class="dot" style="background:${esc(d.langColor || '#888')}"></i>${esc(d.language)}</span>`,
+      `<span class="chip">★ ${n(d.stars)}</span>`, `<span class="chip">⑂ ${n(d.forks)}</span>`,
+      `<span class="chip">${n(d.issues)} issues</span>`, d.license && `<span class="chip">${esc(d.license)}</span>`,
+      d.archived && `<span class="chip">archived</span>`, `<span class="chip">updated ${ago(d.pushedAt)}</span>`,
+    ].filter(Boolean).join('');
+    $('topics').innerHTML = d.topics.map((t) => `<span class="topic">${esc(t)}</span>`).join('');
+    $('acts').innerHTML = `<a class="btn pri" href="${esc(d.url)}" target="_blank" rel="noopener">Open on GitHub ↗</a>` +
+      (d.homepage ? `<a class="btn" href="${esc(d.homepage)}" target="_blank" rel="noopener">${esc(d.homepage.replace(/^https?:\/\//, '').replace(/\/$/, ''))} ↗</a>` : '') +
+      (d.release ? `<a class="btn" href="${esc(d.release.url)}" target="_blank" rel="noopener">${esc(d.release.tag)}</a>` : '');
+    const tot = d.languages.reduce((a, l) => a + l.bytes, 0) || 1;
+    $('stack').innerHTML = d.languages.map((l) => `<i style="width:${l.bytes / tot * 100}%;background:${esc(l.color)}"></i>`).join('');
+    $('key').innerHTML = d.languages.map((l) => `<span><i class="dot" style="background:${esc(l.color)}"></i>${esc(l.name)}<b>${(l.bytes / tot * 100).toFixed(1)}%</b></span>`).join('');
+    $('commits').innerHTML = d.commits.map((c) => `<a class="item" href="${esc(c.url)}" target="_blank" rel="noopener"><div><div class="t">${esc(c.message)}</div><div class="s">${esc(c.author)}</div></div><div class="r">${ago(c.date)}</div></a>`).join('') || '<div class="empty">No commits</div>';
+    $('foot').textContent = `Created ${new Date(d.createdAt).toLocaleDateString()} · ${d.defaultBranch}`;
+    $('app').hidden = false;
+  } catch { $('err').hidden = false; }
+  document.body.classList.remove('loading');
+})();
+</script>
+</body>
+</html>

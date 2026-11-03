@@ -325,6 +325,21 @@ async function buildOrg(login) {
 }
 
 const ORG_TTL = 3 * TTL;
+const LANG_COLORS = { JavaScript: '#f1e05a', TypeScript: '#3178c6', Python: '#3572A5', HTML: '#e34c26', CSS: '#563d7c', Shell: '#89e051', Go: '#00ADD8', Rust: '#dea584', Java: '#b07219', Vue: '#41b883', SCSS: '#c6538c', Dockerfile: '#384d54', 'C#': '#178600', C: '#555555', 'C++': '#f34b7d', Kotlin: '#A97BFF', Swift: '#F05138', PHP: '#4F5D95', Lua: '#000080', PowerShell: '#012456' };
+const getRepoPage = (owner, name) => cached(`repopage:${owner}/${name}`.toLowerCase(), 10 * 60 * 1000, async () => {
+  const base = `/repos/${owner}/${name}`;
+  const [r, langs, commits, rel] = await Promise.all([
+    rest(base), rest(base + '/languages').catch(() => ({})), rest(base + '/commits?per_page=6').catch(() => []), rest(base + '/releases/latest').catch(() => null),
+  ]);
+  return {
+    owner: r.owner.login, name: r.name, description: r.description, url: r.html_url, homepage: r.homepage || '', language: r.language, langColor: LANG_COLORS[r.language] || '#888',
+    stars: r.stargazers_count, forks: r.forks_count, issues: r.open_issues_count, license: r.license?.spdx_id && r.license.spdx_id !== 'NOASSERTION' ? r.license.spdx_id : '', archived: r.archived,
+    topics: r.topics || [], pushedAt: r.pushed_at, createdAt: r.created_at, defaultBranch: r.default_branch,
+    languages: Object.entries(langs).map(([k, v]) => ({ name: k, bytes: v, color: LANG_COLORS[k] || '#888' })),
+    commits: commits.map((c) => ({ message: c.commit.message.split('\n')[0], author: c.author?.login || c.commit.author.name, date: c.commit.author.date, url: c.html_url })),
+    release: rel ? { tag: rel.tag_name, url: rel.html_url } : null,
+  };
+});
 const getOrg = (login) => cached('org:' + login, ORG_TTL, () => buildOrg(login));
 
 let ogCache = null;
@@ -368,6 +383,25 @@ http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, stale-while-revalidate=600' });
       return res.end(JSON.stringify({ ...(await getOrg(login)), orgNames: await getOrgNames(), me: orgList.me }));
     } catch (e) { console.error(e.message); res.writeHead(502, { 'Content-Type': 'application/json' }); return res.end('{"error":"upstream_error"}'); }
+  }
+  if (url.pathname === '/api/repo' || /^\/repos\/[^/]+(?:\/[^/]+)?\/?$/.test(url.pathname)) {
+    try {
+      const parts = url.pathname === '/api/repo' ? (url.searchParams.get('name') || '').split('/') : url.pathname.replace(/^\/repos\//, '').split('/');
+      const [owner, name] = parts.length >= 2 ? [parts[0], parts[1]] : [GH_USER, parts[0]];
+      const okOwner = owner.toLowerCase() === GH_USER.toLowerCase() || (await getOrgNames()).some((n) => n.login.toLowerCase() === owner.toLowerCase());
+      if (!okOwner || !/^[A-Za-z0-9._-]+$/.test(name || '')) { res.writeHead(404); return res.end(); }
+      const d = await getRepoPage(owner, name.replace(/\/$/, ''));
+      if (url.pathname === '/api/repo') {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, stale-while-revalidate=600' });
+        return res.end(JSON.stringify(d));
+      }
+      const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const html = fs.readFileSync(path.join(PUBLIC, 'repo.html'), 'utf8')
+        .replace(/__TITLE__/g, esc(`${d.owner}/${d.name}`)).replace(/__DESC__/g, esc(d.description || `${d.owner}/${d.name} on GitHub`))
+        .replace(/__URL__/g, esc(`https://gh.lapius7.com/repos/${d.owner}/${d.name}`)).replace(/__IMG__/g, esc(`https://opengraph.githubassets.com/1/${d.owner}/${d.name}`));
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+      return res.end(html);
+    } catch (e) { console.error(e.message); res.writeHead(404); return res.end(); }
   }
   const seg = url.pathname.match(/^\/([A-Za-z0-9-]+)(?:\/(?:overview|work|activity|repos))?\/?$/);
   if (seg && !fs.existsSync(path.join(PUBLIC, seg[1]))) {

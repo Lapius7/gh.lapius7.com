@@ -276,7 +276,7 @@ function drawRepos(){
   const q = $('q').value.trim().toLowerCase();
   const list = repos.filter(r => !q || (r.name + ' ' + (r.description||'')).toLowerCase().includes(q));
   $('repocount').textContent = `${list.length} / ${repos.length}`;
-  $('repos').innerHTML = list.map(r => `<a class="repo" href="${esc(r.url)}" target="_blank" rel="noopener">
+  $('repos').innerHTML = list.map(r => `<a class="repo" href="/repos/${esc(r.name)}">
     <div><div class="rn">${esc(r.name)}</div><div class="rd">${esc(r.description || '')}</div></div>
     <div class="rm">${r.primaryLanguage ? `<span class="dot" style="background:${esc(r.primaryLanguage.color||'#888')}"></span>${esc(r.primaryLanguage.name)}` : ''}${r.stargazerCount ? ` · ★ ${r.stargazerCount}` : ''}<br>${new Date(r.pushedAt).toLocaleDateString()}</div></a>`).join('')
     || '<div class="rd" style="padding:12px 0">No match</div>';
