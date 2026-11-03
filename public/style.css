@@ -184,3 +184,5 @@ section.blk[hidden]{display:none}
 .code .ln,.code code{font:inherit;line-height:inherit;display:block}
 .code .ln{position:sticky;left:0;z-index:2;flex:none;min-width:3.2em;box-shadow:1px 0 0 var(--line)}
 .code code{flex:none;min-width:max-content;position:relative;z-index:1}
+.code .ln{position:static;z-index:auto;box-shadow:none}
+.code code{z-index:auto}
