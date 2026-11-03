@@ -186,3 +186,13 @@ section.blk[hidden]{display:none}
 .code code{flex:none;min-width:max-content;position:relative;z-index:1}
 .code .ln{position:static;z-index:auto;box-shadow:none}
 .code code{z-index:auto}
+
+/* スクロールバー */
+*{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:var(--line);border-radius:999px;border:2px solid transparent;background-clip:content-box}
+*::-webkit-scrollbar-thumb:hover{background:var(--muted);background-clip:content-box;border:2px solid transparent}
+*::-webkit-scrollbar-button,*::-webkit-scrollbar-corner{display:none;background:transparent}
+.code{scrollbar-color:color-mix(in srgb,var(--muted) 45%,transparent) transparent}
+.code::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--muted) 45%,transparent);background-clip:content-box}
