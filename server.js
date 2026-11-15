@@ -492,6 +492,9 @@ const OG_V = Date.now().toString(36); // changes on every restart/deploy so link
 const cardCache = new Map(); // pathname -> { t, v }
 let cardRenders = [];       // timestamps of recent renders, to cap CPU (each render is ~200ms)
 const fmtN = (n) => Number(n || 0).toLocaleString('en-US');
+const fmtC = (n) => { n = Number(n || 0); return n < 1000 ? String(n) : n < 10000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K' : n < 1e6 ? Math.round(n / 1000) + 'K' : (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'; };
+const sizeStat = (b) => (b < 1000 ? [String(b), 'SIZE', 'B'] : b < 1048576 ? [(b < 102400 ? (b / 1024).toFixed(1).replace(/\.0$/, '') : String(Math.round(b / 1024))), 'SIZE', 'KB'] : [(b / 1048576).toFixed(1), 'SIZE', 'MB']);
+const ago = (iso) => { const d = (Date.now() - new Date(iso)) / 86400000; return d < 1 ? 'today' : d < 30 ? `${Math.floor(d)}d ago` : d < 365 ? `${Math.floor(d / 30)}mo ago` : `${(d / 365).toFixed(1)}y ago`; };
 const fmtSize = (b) => (b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`);
 async function cardFor(p) {
   const m = p.match(/^\/repos\/(.+)$/);
@@ -499,39 +502,57 @@ async function cardFor(p) {
     const org = p.match(/^\/([A-Za-z0-9-]+)$/);
     if (!org || org[1].toLowerCase() === GH_USER.toLowerCase() || !(await getOrgNames()).some((n) => n.login.toLowerCase() === org[1].toLowerCase())) return null;
     const d = await getOrg(org[1]);
-    return { top: `GITHUB ORGANIZATION / ${d.org.login}`, title: d.org.name || d.org.login, desc: d.org.description, meta: [`${fmtN(d.totals.repos)} repo${d.totals.repos === 1 ? '' : 's'}`, `${fmtN(d.totals.stars)} stars`, `${fmtN(d.org.members)} member${d.org.members === 1 ? '' : 's'}`, d.org.location] };
+    return { top: `GITHUB ORGANIZATION / ${d.org.login}`, title: d.org.name || d.org.login, desc: d.org.description,
+      stats: [[fmtC(d.totals.repos), 'REPOS'], [fmtC(d.totals.stars), 'STARS'], [fmtC(d.totals.forks), 'FORKS'], [fmtC(d.totals.openPrs), 'OPEN PRS']],
+      meta: [`${fmtN(d.org.members)} member${d.org.members === 1 ? '' : 's'}`, d.org.location, d.languages && d.languages[0] && d.languages[0].name] };
   }
   const R = await resolveRepo(m[1], true);
   if (!R) return null;
   const { d0, sub, fpath, ref, thread, commit } = R;
-  const repoMeta = [d0.language, `${fmtN(d0.stars)} stars`, `${fmtN(d0.forks)} forks`, `${fmtN(d0.issues)} issues`, d0.license];
+  const lang = d0.languages && d0.languages[0] ? d0.languages[0].name : d0.language;
+  const repoStats = [[fmtC(d0.stars), 'STARS'], [fmtC(d0.forks), 'FORKS'], [fmtC(d0.issues), 'ISSUES'], [fmtC(d0.contributors.length), 'CONTRIBS']];
+  const repoMeta = [lang, d0.license, d0.pushedAt && `updated ${ago(d0.pushedAt)}`, d0.archived && 'archived'];
   if (sub === 'thread') {
-    if (!thread) return { top: [d0.owner, d0.name], title: `#${R.rest[1]}`, desc: d0.description, meta: repoMeta };
+    const top = [d0.owner, `${d0.name} #${R.rest[1]} / ${R.rest[0].toLowerCase().startsWith('pull') ? 'pull request' : 'issue'}`];
+    if (!thread) return { top, title: `#${R.rest[1]}`, desc: d0.description, stats: repoStats, meta: repoMeta };
     const st = thread.merged ? 'merged' : thread.draft ? 'draft' : thread.state;
-    const meta = [st, `by ${thread.author.login}`];
-    if (thread.info) meta.push(`${thread.info.head} -> ${thread.info.base}`, `+${fmtN(thread.info.additions)} -${fmtN(thread.info.deletions)}`);
-    else if (thread.commentsCount) meta.push(`${thread.commentsCount} comments`);
-    return { top: [d0.owner, `${d0.name} #${thread.n} / ${thread.kind === 'pull' ? 'pull request' : 'issue'}`], title: thread.title || `#${thread.n}`, meta };
+    const meta = [st, `by ${thread.author.login}`, thread.at && `opened ${ago(thread.at)}`];
+    let stats;
+    if (thread.info) {
+      meta.push(`${thread.info.head} -> ${thread.info.base}`);
+      stats = [[`+${fmtC(thread.info.additions)}`, 'ADDITIONS'], [`-${fmtC(thread.info.deletions)}`, 'DELETIONS'], [fmtC(thread.info.files), 'FILES'], [fmtC(thread.info.commits), 'COMMITS']];
+    } else stats = [[fmtC(thread.commentsCount), 'COMMENTS'], [fmtC(thread.labels.length), 'LABELS'], [fmtC(thread.assignees.length), 'ASSIGNEES']];
+    return { top, title: thread.title || `#${thread.n}`, stats, meta };
   }
   if (sub === 'commit') {
-    if (!commit) return { top: [d0.owner, d0.name], title: R.rest[1].slice(0, 7), desc: d0.description, meta: repoMeta };
-    return { top: [d0.owner, `${d0.name} / commit ${commit.sha.slice(0, 7)}`], title: commit.msg.split('\n')[0] || commit.sha.slice(0, 7), meta: [`by ${commit.author.login !== 'ghost' ? commit.author.login : commit.authorName}`, `${commit.files.length}${commit.filesCut ? '+' : ''} files`, `+${fmtN(commit.add)} -${fmtN(commit.del)}`] };
+    const top = [d0.owner, `${d0.name} / commit ${R.rest[1].slice(0, 7)}`];
+    if (!commit) return { top, title: R.rest[1].slice(0, 7), desc: d0.description, stats: repoStats, meta: repoMeta };
+    return { top, title: commit.msg.split('\n')[0] || commit.sha.slice(0, 7),
+      stats: [[`+${fmtC(commit.add)}`, 'ADDITIONS'], [`-${fmtC(commit.del)}`, 'DELETIONS'], [fmtC(commit.files.length) + (commit.filesCut ? '+' : ''), 'FILES']],
+      meta: [`by ${commit.author.login !== 'ghost' ? commit.author.login : commit.authorName}`, commit.at && `committed ${ago(commit.at)}`] };
   }
-  if (sub) return { top: [d0.owner, d0.name], title: { issues: 'Issues', stars: 'Stargazers', forks: 'Forks', license: 'License' }[sub], desc: d0.description, meta: repoMeta };
+  if (sub) return { top: [d0.owner, d0.name], title: { issues: 'Issues', stars: 'Stargazers', forks: 'Forks', license: 'License' }[sub], desc: d0.description, stats: repoStats, meta: repoMeta };
   if (fpath) {
-    const r = ref || d0.defaultBranch, meta = [];
+    const r = ref || d0.defaultBranch;
+    let stats = repoStats.slice(0, 2).concat([repoStats[2]]), meta = [lang];
     try {
       const t = await getTree(d0.owner, d0.name, r), it = t.tree.find((x) => x.p === fpath);
-      if (it && it.d) meta.push('directory', `${t.tree.filter((x) => x.p.startsWith(fpath + '/') && !x.p.slice(fpath.length + 1).includes('/')).length} items`);
-      else if (it) {
+      if (it && it.d) {
+        const inside = t.tree.filter((x) => x.p.startsWith(fpath + '/'));
+        stats = [[fmtC(inside.filter((x) => !x.p.slice(fpath.length + 1).includes('/')).length), 'ITEMS'], [fmtC(inside.filter((x) => !x.d).length), 'FILES'], sizeStat(inside.reduce((n, x) => n + (x.s || 0), 0)), repoStats[0]];
+        meta.unshift('directory');
+      } else if (it) {
         const f = await getFile(d0.owner, d0.name, r, fpath).catch(() => null);
-        if (f && f.text != null) meta.push(`${fmtN(f.text.split('\n').length - (f.text.endsWith('\n') ? 1 : 0))} lines`);
-        meta.push(fmtSize(it.s));
+        stats = [];
+        if (f && f.text != null) stats.push([fmtC(f.text.split('\n').length - (f.text.endsWith('\n') ? 1 : 0)), 'LINES']);
+        stats.push(sizeStat(it.s), repoStats[0], repoStats[1]);
+        const ext = (fpath.match(/\.([A-Za-z0-9]+)$/) || [])[1];
+        meta.unshift(ext ? `.${ext} file` : 'file');
       }
-    } catch { /* no meta */ }
-    return { top: [d0.owner, `${d0.name} @ ${r}`], title: fpath, single: true, desc: d0.description, meta };
+    } catch { /* no extra info */ }
+    return { top: [d0.owner, `${d0.name} @ ${r}`], title: fpath, single: true, desc: d0.description, stats: stats.slice(0, 4), meta: meta.concat(d0.pushedAt && `updated ${ago(d0.pushedAt)}`) };
   }
-  return { top: d0.owner, title: d0.name, desc: d0.description, meta: repoMeta };
+  return { top: d0.owner, title: d0.name, desc: d0.description, stats: repoStats, meta: repoMeta };
 }
 let ogCache = null;
 const escHtml = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

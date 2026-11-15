@@ -212,7 +212,7 @@ function renderOg(s) {
 const asc = (v) => String(v == null ? '' : v).replace(/[{]/g, '(').replace(/[}]/g, ')').replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"')
   .replace(/[^\x20-\x7e]/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
 
-function renderCard({ top = '', title = '', desc = '', meta = [], single = false }) {
+function renderCard({ top = '', title = '', desc = '', meta = [], stats = [], single = false }) {
   const c = canvas();
   const WHITE = [244, 240, 255], MUTED = [176, 170, 214], ACCENT = [255, 204, 226];
   const MAXW = W - 140;
@@ -254,9 +254,16 @@ function renderCard({ top = '', title = '', desc = '', meta = [], single = false
   }
   if (single) { /* drawn above */ } else if (w.cut) { w = wrap(T, 5, 3); end = draw(w.lines, ty, 5, 15, WHITE); } else end = draw(w.lines, ty, 10, 20, WHITE);
   const D = asc(desc).length * 2 < String(desc || '').replace(/\s+/g, ' ').trim().length ? '' : asc(desc); // mostly non-ASCII text would leave only fragments
-  if (D) draw(wrap(D, 4, 2).lines, end + 40, 4, 14, MUTED);
-  const M = meta.map(asc).filter(Boolean).join(' / ');
-  if (M) c.text(c.width(M, 4) > MAXW ? fit(M, 4, MAXW) : M, 70, 480, 4, WHITE);
+  // with a stats row the description only gets what fits above it
+  const STATS_Y = 340, room = stats.length ? Math.floor((STATS_Y - 36 - (end + 40) + 14) / 42) : 2;
+  if (D && room >= 1) draw(wrap(D, 4, Math.min(2, room)).lines, end + 40, 4, 14, MUTED);
+  stats.slice(0, 4).forEach(([val, label, unit], i) => {
+    const x = 70 + i * 280, e = c.text(asc(val) || '0', x, STATS_Y, 10, i === 0 ? ACCENT : WHITE);
+    if (unit) c.text(asc(unit), e + 10, STATS_Y + 42, 4, MUTED);
+    c.text(asc(label), x, STATS_Y + 86, 4, MUTED);
+  });
+  const M = meta.filter(Boolean).map(asc).filter(Boolean).join(' / ');
+  if (M) c.text(c.width(M, 4) > MAXW ? fit(M, 4, MAXW) : M, 70, stats.length ? 492 : 480, 4, WHITE);
   c.text('GH.LAPIUS7.COM', 70, 552, 4, MUTED);
   c.sky(); c.scrim(); c.flush();
   return c.png(1);
