@@ -5,16 +5,25 @@ const $ = (id) => document.getElementById(id);
 const WD = ['Sundays','Mondays','Tuesdays','Wednesdays','Thursdays','Fridays','Saturdays'];
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-// ---- banner: sky on a tiled character grid, drifting clouds, and a wind trail stamped cell by cell along the cursor path ----
+// ---- banner: a halftone dot sky with soft drifting clouds; the cursor leaves a glowing wake ----
 const banner = (() => {
-  const CELL = 8;
-  const PAL = {
-    light: { gap: [246, 251, 254], pale: [226, 241, 250], mid: [164, 211, 240], dot: [38, 128, 206], cloud: [255, 255, 255], ink: [112, 132, 160], wind: [30, 96, 184], k: 0.35 },
-    dark:  { gap: [10, 22, 52],    pale: [26, 52, 104],   mid: [44, 88, 158],   dot: [96, 156, 232], cloud: [206, 220, 242], ink: [150, 176, 220], wind: [150, 200, 255], k: 0.1 },
+  const CELL = 7;
+  const THEMES = {
+    dark: {
+      sky: [[0, [8, 12, 34]], [0.4, [20, 28, 74]], [0.75, [52, 42, 102]], [1, [104, 66, 124]]],
+      cloud: [186, 178, 236], warm: [255, 188, 168], shade: [26, 30, 78], rim: [236, 232, 255],
+      glow: [196, 208, 255], glowAt: [0.82, 0.2], glowA: 0.2, glowR: 240, star: true, accent: [110, 224, 255],
+    },
+    light: {
+      sky: [[0, [112, 190, 242]], [0.45, [164, 214, 246]], [0.8, [222, 238, 250]], [1, [252, 244, 236]]],
+      cloud: [255, 255, 255], warm: [255, 226, 206], shade: [150, 178, 214], rim: [255, 255, 255],
+      glow: [255, 250, 236], glowAt: [0.14, 0.18], glowA: 0.45, glowR: 280, star: false, accent: [36, 128, 255],
+    },
   };
   const mix = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
   const rgb = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
-  const smooth = (e0, e1, v) => { const t = Math.min(1, Math.max(0, (v - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  const clamp = (v, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
+  const smooth = (e0, e1, v) => { const t = clamp((v - e0) / (e1 - e0)); return t * t * (3 - 2 * t); };
   const hash = (x, y) => { const h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return h - Math.floor(h); };
   const vnoise = (x, y) => {
     const xi = Math.floor(x), yi = Math.floor(y), u = x - xi, v = y - yi;
@@ -22,11 +31,12 @@ const banner = (() => {
     const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
     return a + (b - a) * su + (c - a) * sv + (a - b - c + d) * su * sv;
   };
-  const fbm = (x, y) => (vnoise(x, y) * 0.55 + vnoise(x * 2.1 + 7, y * 2.1 + 3) * 0.3 + vnoise(x * 4.3 + 1, y * 4.3 + 9) * 0.15);
-  const EDGE = ['.', ',', ':', ';', '~', ')', '(', 'o', '8', '%'];
-  const MAX_STAMPS = 900;
-  // Wind-trail rows around the cursor row: [offset, chance to start a run, chance to end it]
-  const ROWS = [[-2, 0.1, 0.08], [-1, 0.4, 0.04], [0, 0.55, 0.03], [1, 0.4, 0.04], [2, 0.1, 0.08]];
+  const fbm = (x, y) => vnoise(x, y) * 0.55 + vnoise(x * 2.1 + 7, y * 2.1 + 3) * 0.3 + vnoise(x * 4.3 + 1, y * 4.3 + 9) * 0.15;
+  const sample = (stops, v) => {
+    for (let i = 1; i < stops.length; i++) if (v <= stops[i][0]) return mix(stops[i - 1][1], stops[i][1], (v - stops[i - 1][0]) / (stops[i][0] - stops[i - 1][0]));
+    return stops[stops.length - 1][1];
+  };
+  const WAKE_R = 5, DECAY = 0.95;
 
   let raf = 0, stop = () => {};
   return function banner() {
@@ -34,8 +44,7 @@ const banner = (() => {
     const el = document.querySelector('.banner'), c = $('bn'), ctx = c && c.getContext('2d');
     if (!el || !ctx) return;
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let w = 0, h = 0, cols = 0, rows = 0, last = 0;
-    const stamps = new Map();
+    let w = 0, h = 0, cols = 0, rows = 0, last = 0, dens = new Float32Array(0), wake = new Float32Array(0);
     const fit = () => {
       const dpr = Math.min(devicePixelRatio || 1, 2);
       w = c.clientWidth; h = c.clientHeight;
@@ -43,86 +52,69 @@ const banner = (() => {
       c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       cols = Math.ceil(w / CELL); rows = Math.ceil(h / CELL);
+      dens = new Float32Array(cols * rows); wake = new Float32Array(cols * rows);
       return true;
     };
-    const drawStamps = (now, P) => {
-      ctx.lineCap = 'butt'; ctx.lineWidth = 1.7;
-      for (const [key, s] of stamps) {
-        const age = now - s.t0;
-        if (age > s.life) { stamps.delete(key); continue; }
-        const a = age < s.life * 0.7 ? 1 : 1 - (age - s.life * 0.7) / (s.life * 0.3);
-        const x = s.q * CELL, y = s.r * CELL;
-        ctx.fillStyle = rgb(mix(P.pale, P.cloud, P.k), a); ctx.fillRect(x + 0.5, y + 0.5, CELL - 1, CELL - 1);
-        ctx.strokeStyle = rgb(P.wind, a);
-        const amp = s.wave ? 2 * Math.max(0, 1 - age / 380) : 0, cx = x + CELL / 2, cy = y + CELL / 2;
-        ctx.beginPath();
-        if (s.ch === '-') {
-          for (let i = 0; i <= CELL; i += 2) { const py = cy + Math.sin((x + i) / 3.2 + age / 70) * amp; i ? ctx.lineTo(x + i, py) : ctx.moveTo(x, py); }
-        } else if (s.ch === '|') {
-          for (let i = 0; i <= CELL; i += 2) { const px = cx + Math.sin((y + i) / 3.2 + age / 70) * amp; i ? ctx.lineTo(px, y + i) : ctx.moveTo(px, y); }
-        } else if (s.ch === '\\') { ctx.moveTo(x + 1, y + 1); ctx.lineTo(x + CELL - 1, y + CELL - 1); }
-        else { ctx.moveTo(x + 1, y + CELL - 1); ctx.lineTo(x + CELL - 1, y + 1); }
-        ctx.stroke();
-      }
-    };
     const draw = (now) => {
-      const t = now / 1000, P = PAL[document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'];
-      ctx.fillStyle = rgb(P.gap); ctx.fillRect(0, 0, w, h);
-      ctx.font = `600 ${CELL + 3}px ui-monospace, Menlo, Consolas, monospace`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const t = now / 1000, T = THEMES[document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'];
+      // Backdrop gradient and a soft sun/moon glow.
+      const g = ctx.createLinearGradient(0, 0, 0, h);
+      T.sky.forEach(([p, col]) => g.addColorStop(p, rgb(col)));
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      const gx = T.glowAt[0] * w, gy = T.glowAt[1] * h, gg = ctx.createRadialGradient(gx, gy, 0, gx, gy, T.glowR);
+      gg.addColorStop(0, rgb(T.glow, T.glowA)); gg.addColorStop(1, rgb(T.glow, 0));
+      ctx.fillStyle = gg; ctx.fillRect(0, 0, w, h);
+      // Cloud density per cell: slow drift, a fine wisp layer on top.
+      for (let r = 0; r < rows; r++) for (let q = 0; q < cols; q++) {
+        const n = fbm(q * 0.04 - t * 0.02, r * 0.085 + 3), wisp = fbm(q * 0.09 - t * 0.7 * 0.09, r * 0.26 + 11);
+        dens[r * cols + q] = clamp(smooth(0.4, 0.7, n) * (0.7 + 0.6 * wisp));
+      }
       for (let r = 0; r < rows; r++) {
-        const vy = r / rows, top = Math.pow(1 - vy, 1.4);
+        const vy = r / rows, base = sample(T.sky, vy);
         for (let q = 0; q < cols; q++) {
-          const x = q * CELL, y = r * CELL;
-          const n = fbm(q * 0.075 - t * 0.4 * 0.075, r * 0.14 + 4);
-          if (n > 0.64) { ctx.fillStyle = rgb(P.cloud); ctx.fillRect(x, y, CELL, CELL); continue; }
-          const m = fbm(q * 0.11 + t * 0.03, r * 0.16 + t * 0.02 + 20);
-          const tint = Math.min(1, Math.max(0, (m - 0.38) * 1.1 + top * 0.4));
-          if (n > 0.545) {
-            // Cloud edge: near-white tile with a heavy glyph, heavier glyphs nearer the white core.
-            const k = (n - 0.545) / 0.095, i = Math.min(EDGE.length - 1, Math.floor(k * 7 + hash(q, r) * 3.2));
-            ctx.fillStyle = rgb(mix(mix(P.pale, P.cloud, P.k), P.cloud, k * 0.6)); ctx.fillRect(x + 0.5, y + 0.5, CELL - 1, CELL - 1);
-            ctx.fillStyle = rgb(P.ink, 0.6 + k * 0.4); ctx.fillText(EDGE[i], x + CELL / 2, y + CELL / 2 + 0.5);
-            continue;
+          const i = r * cols + q, d = dens[i], e = wake[i];
+          const below = r + 1 < rows ? dens[i + cols] : d, above = r > 0 ? dens[i - cols] : d;
+          const x = q * CELL + CELL / 2, y = r * CELL + CELL / 2, hs = hash(q, r);
+          let rad, col, alpha;
+          if (d > 0.04) {
+            // Cloud: larger, lighter dots; lit rim on top edges, cooler shade underneath.
+            let cc = mix(T.cloud, T.warm, vy * 0.55);
+            cc = mix(cc, T.rim, clamp((d - below) * 3.5) * 0.6);
+            cc = mix(cc, T.shade, clamp((d - above) * 3) * 0.4);
+            col = mix(base, cc, 0.5 + 0.5 * d); rad = 0.7 + d * 2.7; alpha = 0.5 + d * 0.5;
+          } else {
+            col = mix(base, [255, 255, 255], 0.22); rad = 0.55 + hs * 0.5 + (1 - vy) * 0.35; alpha = 0.45;
+            if (T.star && hs > 0.982 - (1 - vy) * 0.012) {
+              const tw = 0.5 + 0.5 * Math.sin(t * (1 + hs * 3) + hs * 40);
+              col = [235, 240, 255]; rad = 0.9 + tw * 0.9; alpha = 0.35 + tw * 0.65;
+            }
           }
-          const near = smooth(0.48, 0.545, n);
-          ctx.fillStyle = rgb(mix(mix(P.pale, P.mid, tint * 0.85), P.cloud, near * P.k));
-          ctx.fillRect(x + 0.5, y + 0.5, CELL - 1, CELL - 1);
-          const s = 1 + Math.round((tint * 2.4 + top * 1.2) * (1 - near)) + (hash(q, r) > 0.8 ? 1 : 0);
-          ctx.fillStyle = rgb(P.dot, 0.3 + tint * 0.45);
-          ctx.fillRect(x + (CELL - s) / 2, y + (CELL - s) / 2, s, s);
+          if (e > 0.01) { col = mix(col, T.accent, clamp(e) * 0.85); rad += e * 2.2; alpha = Math.min(1, alpha + e * 0.5); }
+          ctx.fillStyle = rgb(col, alpha);
+          ctx.beginPath(); ctx.arc(x, y, Math.min(rad, CELL / 2 + 0.3), 0, 6.2832); ctx.fill();
         }
       }
-      drawStamps(now, P);
+      for (let i = 0; i < wake.length; i++) wake[i] *= DECAY;
     };
     const loop = (now) => { raf = requestAnimationFrame(loop); if (now - last < 33) return; last = now; draw(now); };
 
-    // Cursor trail: every cell the cursor crosses gets a glyph that follows the direction of travel,
-    // on several neighbouring rows that start and stop at random, so the runs have different lengths.
-    let pq = -1, pr = -1, vx = 0, vy = 0;
-    const active = ROWS.map(() => false);
-    const stamp = (q, r, now) => {
-      const horiz = Math.abs(vx) >= Math.abs(vy) * 0.6;
-      const ang = Math.atan2(vy, vx), oct = ((Math.round(ang / (Math.PI / 4)) % 8) + 8) % 8;
-      const ch = oct % 4 === 0 ? '-' : oct % 4 === 2 ? '|' : (oct === 1 || oct === 5) ? '\\' : '/';
-      ROWS.forEach(([off, on, offp], i) => {
-        active[i] = active[i] ? Math.random() > offp : Math.random() < on;
-        if (!active[i]) return;
-        const qq = horiz ? q : q + off, rr = horiz ? r + off : r;
-        if (qq < 0 || rr < 0 || qq >= cols || rr >= rows) return;
-        stamps.set(rr * 4096 + qq, { q: qq, r: rr, ch, t0: now, life: 850 + Math.random() * 400, wave: ch === '-' || ch === '|' ? Math.abs(off) !== 0 || Math.random() < 0.3 : false });
-      });
-      if (stamps.size > MAX_STAMPS) stamps.delete(stamps.keys().next().value);
+    // Cursor wake: each step adds energy around the pointer, which swells and tints the nearby dots, then fades.
+    let pq = -1, pr = -1;
+    const splat = (q, r) => {
+      for (let dr = -WAKE_R; dr <= WAKE_R; dr++) for (let dq = -WAKE_R; dq <= WAKE_R; dq++) {
+        const qq = q + dq, rr = r + dr;
+        if (qq < 0 || rr < 0 || qq >= cols || rr >= rows) continue;
+        const k = 1 - Math.hypot(dq, dr) / (WAKE_R + 0.5);
+        if (k > 0) wake[rr * cols + qq] = Math.min(1.3, wake[rr * cols + qq] + k * k * 0.4);
+      }
     };
     const move = (e) => {
       const b = c.getBoundingClientRect(), x = e.clientX - b.left, y = e.clientY - b.top;
       if (x < 0 || y < 0 || x >= b.width || y >= b.height) { pq = pr = -1; return; }
       const q = Math.floor(x / CELL), r = Math.floor(y / CELL);
-      if (pq < 0) { pq = q; pr = r; vx = vy = 0; return; }
-      if (q === pq && r === pr) return;
-      vx = vx * 0.5 + (q - pq) * 0.5; vy = vy * 0.5 + (r - pr) * 0.5;
-      const now = performance.now(), steps = Math.max(Math.abs(q - pq), Math.abs(r - pr));
-      for (let i = 1; i <= steps; i++) stamp(Math.round(pq + (q - pq) * i / steps), Math.round(pr + (r - pr) * i / steps), now);
+      if (pq < 0) { pq = q; pr = r; }
+      const steps = Math.max(Math.abs(q - pq), Math.abs(r - pr), 1);
+      for (let i = 1; i <= steps; i++) splat(Math.round(pq + (q - pq) * i / steps), Math.round(pr + (r - pr) * i / steps));
       pq = q; pr = r;
     };
     const leave = () => { pq = pr = -1; };
