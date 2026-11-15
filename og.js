@@ -65,8 +65,12 @@ const sample = (stops, v) => {
 };
 const HEAT = [[255, 255, 255, 0.08], [96, 84, 160, 1], [156, 112, 196, 1], [226, 150, 200, 1], [255, 204, 226, 1]];
 
+const CELL = 10;
 function canvas() {
   const px = new Float32Array(W * H * 3);
+  // Text is built from the sky's own dot grid: glyph pixels at CELL scale light up the background dots themselves,
+  // smaller text clears the dots behind it, so no letter is ever drawn on top of a background dot.
+  const ops = [], lit = new Set(), masks = [];
   const blend = (x, y, col, a) => {
     if (a <= 0 || x < 0 || y < 0 || x >= W || y >= H) return;
     const o = (y * W + x) * 3;
@@ -91,7 +95,7 @@ function canvas() {
     for (let y = 0; y < H; y++) for (let x = Math.max(0, gx - R | 0); x < Math.min(W, gx + R); x++) {
       const d = Math.hypot(x - gx, y - gy) / R; if (d < 1) blend(x, y, [196, 208, 255], 0.2 * (1 - d) * (1 - d));
     }
-    const CELL = 10, cols = Math.ceil(W / CELL), rows = Math.ceil(H / CELL), dens = new Float32Array(cols * rows);
+    const cols = Math.ceil(W / CELL), rows = Math.ceil(H / CELL), dens = new Float32Array(cols * rows);
     for (let r = 0; r < rows; r++) for (let q = 0; q < cols; q++) {
       const n = fbm(q * 0.05 + 8, r * 0.1 + 3), wisp = fbm(q * 0.11, r * 0.3 + 11);
       dens[r * cols + q] = clamp(smooth(0.4, 0.7, n) * (0.7 + 0.6 * wisp));
@@ -101,14 +105,17 @@ function canvas() {
       for (let q = 0; q < cols; q++) {
         const i = r * cols + q, d = dens[i], below = r + 1 < rows ? dens[i + cols] : d, above = r > 0 ? dens[i - cols] : d, hs = hash(q, r);
         const x = q * CELL + CELL / 2, y = r * CELL + CELL / 2;
+        if (lit.has(q + ',' + r)) continue;
+        // dots behind small text fade out softly instead of fighting the letters
+        const dm = masks.reduce((mn, m) => Math.min(mn, Math.hypot(Math.max(m[0] - x, 0, x - m[2]), Math.max(m[1] - y, 0, y - m[3]))), 99), fade = 0.1 + 0.9 * smooth(0, 56, dm);
         if (d > 0.04) {
           let cc = mix([186, 178, 236], [255, 188, 168], vy * 0.55);
           cc = mix(cc, [236, 232, 255], clamp((d - below) * 3.5) * 0.6);
           cc = mix(cc, [26, 30, 78], clamp((d - above) * 3) * 0.4);
-          dot(x, y, Math.min(0.9 + d * 3.6, CELL / 2 + 0.3), mix(base, cc, 0.5 + 0.5 * d), 0.5 + d * 0.5);
+          dot(x, y, Math.min(0.9 + d * 3.6, CELL / 2 + 0.3), mix(base, cc, 0.5 + 0.5 * d), (0.5 + d * 0.5) * fade);
         } else if (hs > 0.982 - (1 - vy) * 0.012) {
-          dot(x, y, 1.3 + hs * 1.2, [235, 240, 255], 0.5 + hs * 0.5);
-        } else dot(x, y, 0.8 + hs * 0.6 + (1 - vy) * 0.4, mix(base, [255, 255, 255], 0.22), 0.45);
+          dot(x, y, 1.3 + hs * 1.2, [235, 240, 255], (0.5 + hs * 0.5) * fade);
+        } else dot(x, y, 0.8 + hs * 0.6 + (1 - vy) * 0.4, mix(base, [255, 255, 255], 0.22), 0.45 * fade);
       }
     }
   };
@@ -121,13 +128,27 @@ function canvas() {
   };
   const width = (str, s) => [...String(str).toUpperCase()].reduce((n, ch) => n + ((FONT[ch] || FONT[' ']).split(' ')[0].length + 1) * s, 0) - s;
   const text = (str, x, y, s, col, a = 1) => {
-    const rad = s * (s >= 6 ? 0.44 : 0.5);
-    for (const ch of String(str).toUpperCase()) {
-      const g = (FONT[ch] || FONT[' ']).split(' ');
-      g.forEach((row, r) => [...row].forEach((v, c) => v === '1' && dot(x + (c + 0.5) * s, y + (r + 0.5) * s, rad, col, a)));
-      x += (g[0].length + 1) * s;
+    const x0 = x, up = String(str).toUpperCase();
+    ops.push({ up, x, y, s, col, a });
+    if (s === CELL) {
+      for (const ch of up) {
+        const g = (FONT[ch] || FONT[' ']).split(' ');
+        g.forEach((row, r) => [...row].forEach((v, c) => v === '1' && lit.add(`${(x + c * s) / CELL},${(y + r * s) / CELL}`)));
+        x += (g[0].length + 1) * s;
+      }
+    } else masks.push([x0 - 4, y - 4, x0 + width(up, s) + 4, y + 7 * s + 4]);
+    return x0 + width(up, s) + s;
+  };
+  const flush = () => {
+    for (const { up, x: x0, y, s, col, a } of ops) {
+      let x = x0;
+      const rad = s === CELL ? CELL * 0.46 : s * (s >= 6 ? 0.44 : 0.5);
+      for (const ch of up) {
+        const g = (FONT[ch] || FONT[' ']).split(' ');
+        g.forEach((row, r) => [...row].forEach((v, c) => v === '1' && dot(x + (c + 0.5) * s, y + (r + 0.5) * s, rad, col, a)));
+        x += (g[0].length + 1) * s;
+      }
     }
-    return x;
   };
   const png = () => {
     const raw = Buffer.alloc((W * 3 + 1) * H);
@@ -136,15 +157,14 @@ function canvas() {
     ihdr.writeUInt32BE(W, 0); ihdr.writeUInt32BE(H, 4); ihdr[8] = 8; ihdr[9] = 2;
     return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw, { level: 9 })), chunk('IEND', Buffer.alloc(0))]);
   };
-  return { sky, scrim, dot, rrect, text, width, png };
+  return { sky, scrim, dot, rrect, text, flush, width, png };
 }
 
 function renderOg(s) {
   const c = canvas();
-  c.sky(); c.scrim();
   const WHITE = [244, 240, 255], MUTED = [176, 170, 214], ACCENT = [255, 204, 226];
-  c.text(s.user.login, 70, 56, 10, WHITE);
-  c.text('GITHUB ACTIVITY / LAST YEAR', 70, 146, 4, MUTED);
+  c.text(s.user.login, 70, 40, 10, WHITE);
+  c.text('GITHUB ACTIVITY / LAST YEAR', 70, 130, 4, MUTED);
 
   const stats = [
     [s.year.total.toLocaleString('en-US'), '', 'CONTRIBUTIONS'],
@@ -153,10 +173,12 @@ function renderOg(s) {
   ];
   stats.forEach(([n, unit, label], i) => {
     const x = 70 + i * 380;
-    const end = c.text(n, x, 210, 8, i === 0 ? ACCENT : WHITE);
-    if (unit) c.text(unit, end + 8, 210 + 28, 4, MUTED);
-    c.text(label, x, 282, 3, MUTED);
+    const end = c.text(n, x, 190, 10, i === 0 ? ACCENT : WHITE);
+    if (unit) c.text(unit, end + 10, 190 + 42, 4, MUTED);
+    c.text(label, x, 280, 4, MUTED);
   });
+  c.text('GH.LAPIUS7.COM', 70, 552, 4, MUTED);
+  c.sky(); c.scrim(); c.flush();
 
   // contribution heatmap (last year), rounded cells in the dusk palette
   const days = s.year.days, max = Math.max(1, ...days.map((d) => d.count));
@@ -169,7 +191,6 @@ function renderOg(s) {
     c.rrect(x0 + Math.floor((i + first) / 7) * (cell + gap), y0 + d.weekday * (cell + gap), cell, cell, cell * 0.28, [r, g, b], a);
   });
 
-  c.text('GH.LAPIUS7.COM', 70, 552, 4, MUTED);
   return c.png();
 }
 

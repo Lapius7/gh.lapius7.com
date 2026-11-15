@@ -390,8 +390,13 @@ a.chip:hover{border-color:var(--muted)}a.chip:active{transform:scale(.96)}
 .srcwrap.open .code{max-height:calc(var(--h) - 54px)}
 @media(min-width:1000px){
   .srcwrap.open{display:grid;grid-template-columns:280px minmax(0,1fr);gap:12px;align-items:start;position:relative;left:50%;width:min(1120px,calc(100vw - 48px));transform:translateX(-50%);animation:srcOpen .28s cubic-bezier(.2,.8,.2,1)}
-  .srcwrap.open .src{position:sticky;top:12px;max-height:var(--h)}
-  .srcwrap.open .viewer{margin-top:0}
+  .srcwrap.open{--h:min(calc(100vh - 24px),900px)}
+  .srcwrap.open .src,.srcwrap.open .viewer{height:var(--h);max-height:none}
+  .srcwrap.open .viewer{margin-top:0;display:flex;flex-direction:column}
+  .srcwrap.open .viewer>.code{flex:1;min-height:0;max-height:none}
+  .srcwrap.open .viewer>:not(.code){flex:none}
+  .srcwrap.open .viewer>.v-state,.srcwrap.open .viewer>.v-img{flex:1;min-height:0;overflow:auto}
+  .srcwrap.open .viewer{scroll-margin-top:12px}
   .srcwrap.open .src-bar{flex-direction:column;align-items:stretch;gap:8px;padding:10px}
   .srcwrap.open .src-find{width:100%}
   .srcwrap.open .fr{height:34px;padding:0 12px}
