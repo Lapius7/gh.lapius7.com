@@ -503,21 +503,21 @@ async function cardFor(p) {
   }
   const R = await resolveRepo(m[1], true);
   if (!R) return null;
-  const { d0, sub, fpath, ref, thread, commit } = R, full = `${d0.owner}/${d0.name}`;
+  const { d0, sub, fpath, ref, thread, commit } = R;
   const repoMeta = [d0.language, `${fmtN(d0.stars)} stars`, `${fmtN(d0.forks)} forks`, `${fmtN(d0.issues)} issues`, d0.license];
   if (sub === 'thread') {
-    if (!thread) return { top: full, title: `#${R.rest[1]}`, desc: d0.description, meta: repoMeta };
+    if (!thread) return { top: [d0.owner, d0.name], title: `#${R.rest[1]}`, desc: d0.description, meta: repoMeta };
     const st = thread.merged ? 'merged' : thread.draft ? 'draft' : thread.state;
     const meta = [st, `by ${thread.author.login}`];
     if (thread.info) meta.push(`${thread.info.head} -> ${thread.info.base}`, `+${fmtN(thread.info.additions)} -${fmtN(thread.info.deletions)}`);
     else if (thread.commentsCount) meta.push(`${thread.commentsCount} comments`);
-    return { top: `${full} #${thread.n} / ${thread.kind === 'pull' ? 'pull request' : 'issue'}`, title: thread.title || `#${thread.n}`, meta };
+    return { top: [d0.owner, `${d0.name} #${thread.n} / ${thread.kind === 'pull' ? 'pull request' : 'issue'}`], title: thread.title || `#${thread.n}`, meta };
   }
   if (sub === 'commit') {
-    if (!commit) return { top: full, title: R.rest[1].slice(0, 7), desc: d0.description, meta: repoMeta };
-    return { top: `${full} / commit ${commit.sha.slice(0, 7)}`, title: commit.msg.split('\n')[0] || commit.sha.slice(0, 7), meta: [`by ${commit.author.login !== 'ghost' ? commit.author.login : commit.authorName}`, `${commit.files.length}${commit.filesCut ? '+' : ''} files`, `+${fmtN(commit.add)} -${fmtN(commit.del)}`] };
+    if (!commit) return { top: [d0.owner, d0.name], title: R.rest[1].slice(0, 7), desc: d0.description, meta: repoMeta };
+    return { top: [d0.owner, `${d0.name} / commit ${commit.sha.slice(0, 7)}`], title: commit.msg.split('\n')[0] || commit.sha.slice(0, 7), meta: [`by ${commit.author.login !== 'ghost' ? commit.author.login : commit.authorName}`, `${commit.files.length}${commit.filesCut ? '+' : ''} files`, `+${fmtN(commit.add)} -${fmtN(commit.del)}`] };
   }
-  if (sub) return { top: full, title: { issues: 'Issues', stars: 'Stargazers', forks: 'Forks', license: 'License' }[sub], desc: d0.description, meta: repoMeta };
+  if (sub) return { top: [d0.owner, d0.name], title: { issues: 'Issues', stars: 'Stargazers', forks: 'Forks', license: 'License' }[sub], desc: d0.description, meta: repoMeta };
   if (fpath) {
     const r = ref || d0.defaultBranch, meta = [];
     try {
@@ -529,7 +529,7 @@ async function cardFor(p) {
         meta.push(fmtSize(it.s));
       }
     } catch { /* no meta */ }
-    return { top: `${full} @ ${r}`, title: fpath, single: true, desc: d0.description, meta };
+    return { top: [d0.owner, `${d0.name} @ ${r}`], title: fpath, single: true, desc: d0.description, meta };
   }
   return { top: d0.owner, title: d0.name, desc: d0.description, meta: repoMeta };
 }

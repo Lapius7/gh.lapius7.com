@@ -238,7 +238,9 @@ function renderCard({ top = '', title = '', desc = '', meta = [], single = false
   const draw = (lines, y, s, gap, col) => { lines.forEach((l, i) => c.text(l, 70, y + i * (7 * s + gap), s, col)); return y + (lines.length - 1) * (7 * s + gap) + 7 * s; };
 
   const T = asc(title) || '-';
-  if (top) c.text(wrapOne(top), 70, 40, 4, ACCENT);
+  const tops = (Array.isArray(top) ? top : [top]).filter(Boolean);
+  tops.forEach((t, i) => c.text(wrapOne(t), 70, 40 + i * 40, 4, ACCENT));
+  const ty = 100 + Math.max(0, tops.length - 1) * 40; // title starts below the label lines
   function wrapOne(v) { const t = asc(v); return c.width(t, 4) > MAXW ? fit(t, 4, MAXW) : t; }
   let w, end;
   if (single) {
@@ -246,11 +248,11 @@ function renderCard({ top = '', title = '', desc = '', meta = [], single = false
     const sz = [10, 8, 7, 6, 5, 4].find((z) => c.width(T, z) <= MAXW) || 4;
     let t = T;
     if (c.width(t, sz) > MAXW) { while (t.length > 1 && c.width('...' + t, sz) > MAXW) t = t.slice(1); t = '...' + t; }
-    end = draw([t], 100, sz, 0, WHITE);
+    end = draw([t], ty, sz, 0, WHITE);
   } else {
     w = wrap(T, 10, 2);
   }
-  if (single) { /* drawn above */ } else if (w.cut) { w = wrap(T, 5, 3); end = draw(w.lines, 100, 5, 15, WHITE); } else end = draw(w.lines, 100, 10, 20, WHITE);
+  if (single) { /* drawn above */ } else if (w.cut) { w = wrap(T, 5, 3); end = draw(w.lines, ty, 5, 15, WHITE); } else end = draw(w.lines, ty, 10, 20, WHITE);
   const D = asc(desc).length * 2 < String(desc || '').replace(/\s+/g, ' ').trim().length ? '' : asc(desc); // mostly non-ASCII text would leave only fragments
   if (D) draw(wrap(D, 4, 2).lines, end + 40, 4, 14, MUTED);
   const M = meta.map(asc).filter(Boolean).join(' / ');
