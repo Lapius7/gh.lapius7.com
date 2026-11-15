@@ -378,6 +378,12 @@ const getRepoPage = (owner, name) => cached(`repopage:${owner}/${name}`.toLowerC
 const getOrg = (login) => cached('org:' + login, ORG_TTL, () => buildOrg(login));
 
 let ogCache = null;
+const escHtml = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Put the final tab title into the served HTML so it never changes after the page loads.
+const withTitle = (html, name) => {
+  const t = escHtml(`${name} · GitHub`);
+  return html.replace(/<title>[^<]*<\/title>/, `<title>${t}</title>`).replace(/(<meta property="og:title" content=")[^"]*"/, `$1${t}"`);
+};
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 
 http.createServer(async (req, res) => {
@@ -453,19 +459,23 @@ http.createServer(async (req, res) => {
   if (seg && !fs.existsSync(path.join(PUBLIC, seg[1]))) {
     try {
       if ((await getOrgNames()).some((n) => n.login.toLowerCase() === seg[1].toLowerCase())) {
-        return fs.readFile(path.join(PUBLIC, 'org.html'), (err, buf) => { res.writeHead(err ? 500 : 200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' }); res.end(buf); });
+        let name = seg[1];
+        try { const o = (await getOrg(seg[1])).org; name = o.name || o.login; } catch (e) { console.error(e.message); }
+        return fs.readFile(path.join(PUBLIC, 'org.html'), (err, buf) => { res.writeHead(err ? 500 : 200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' }); res.end(err ? undefined : withTitle(buf.toString(), name)); });
       }
     } catch (e) { console.error(e.message); }
   }
   const rel = url.pathname === '/' || /^\/(overview|work|activity|repos)\/?$/.test(url.pathname) ? '/index.html' : decodeURIComponent(url.pathname);
   const file = path.join(PUBLIC, path.normalize(rel));
   if (!file.startsWith(PUBLIC + path.sep)) { res.writeHead(403); return res.end(); }
+  let pageName = '';
+  if (rel === '/index.html') { try { const u = (await getStats('week')).user; pageName = u.name || u.login; } catch (e) { console.error(e.message); } }
   fs.readFile(file, (err, buf) => {
     if (err) { res.writeHead(404); return res.end('Not found'); }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     // OG image URL gets a fresh random query so crawlers never reuse a stale cache
     const body = path.extname(file) === '.html'
-      ? buf.toString().replace(/\/og\.png"/g, `/og.png?v=${Math.random().toString(36).slice(2, 10)}"`)
+      ? (pageName ? withTitle(buf.toString(), pageName) : buf.toString()).replace(/\/og\.png"/g, `/og.png?v=${Math.random().toString(36).slice(2, 10)}"`)
       : buf;
     res.end(body);
   });
