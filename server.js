@@ -468,27 +468,29 @@ http.createServer(async (req, res) => {
       return res.end(JSON.stringify(await getFile(owner, name, ref, p)));
     } catch (e) { res.writeHead(404); return res.end(); }
   }
-  if (url.pathname === '/api/repo' || /^\/repos\/[^/]+(?:\/[^/]+){0,2}\/?$/.test(url.pathname)) {
+  if (url.pathname === '/api/repo' || /^\/repos\/[^/]+(?:\/.*)?$/.test(url.pathname)) {
     try {
       const isOwner = async (l) => l.toLowerCase() === GH_USER.toLowerCase() || (await getOrgNames()).some((n) => n.login.toLowerCase() === l.toLowerCase());
-      const parts = (url.pathname === '/api/repo' ? (url.searchParams.get('name') || '') : url.pathname.replace(/^\/repos\//, '')).split('/').filter(Boolean);
-      let sub = '';
-      {
-        if (parts.length === 3) { sub = REPO_SUBS[parts.pop().toLowerCase()]; if (!sub) { res.writeHead(404); return res.end(); } }
-        else if (parts.length === 2 && REPO_SUBS[parts[1].toLowerCase()] && !(await isOwner(parts[0]))) sub = REPO_SUBS[parts.pop().toLowerCase()];
-      }
-      const [owner, name] = parts.length >= 2 ? [parts[0], parts[1]] : [GH_USER, parts[0]];
-      const okOwner = await isOwner(owner);
-      if (!okOwner || !/^[A-Za-z0-9._-]+$/.test(name || '')) { res.writeHead(404); return res.end(); }
-      const d = await getRepoPage(owner, name);
+      const parts = (url.pathname === '/api/repo' ? (url.searchParams.get('name') || '') : url.pathname.replace(/^\/repos\//, '')).split('/').filter(Boolean).map((x) => { try { return decodeURIComponent(x); } catch { return x; } });
+      // /repos/<name>[/<ref>/<path…>|/<sub>] for the main user, /repos/<owner>/<name>[…] for orgs
+      const ownerForm = parts.length >= 2 && (await isOwner(parts[0])) && /^[A-Za-z0-9._-]+$/.test(parts[1]);
+      const [owner, name] = ownerForm ? [parts[0], parts[1]] : [GH_USER, parts[0]];
+      const rest = parts.slice(ownerForm ? 2 : 1);
+      let sub = '', fpath = '';
+      if (rest.length === 1 && REPO_SUBS[rest[0].toLowerCase()]) sub = REPO_SUBS[rest[0].toLowerCase()];
+      else fpath = rest.slice(1).join('/');
+      if (!(await isOwner(owner)) || !/^[A-Za-z0-9._-]+$/.test(name || '')) { res.writeHead(404); return res.end(); }
+      const d0 = await getRepoPage(owner, name);
+      const base = owner.toLowerCase() === GH_USER.toLowerCase() ? `/repos/${d0.name}` : `/repos/${d0.owner}/${d0.name}`;
+      const d = { ...d0, base };
       if (url.pathname === '/api/repo') {
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, stale-while-revalidate=600' });
         return res.end(JSON.stringify(d));
       }
       const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
       const html = fs.readFileSync(path.join(PUBLIC, 'repo.html'), 'utf8')
-        .replace(/__TITLE__/g, esc(`${d.owner}/${d.name}${sub ? ' · ' + ({ issues: 'Issues', stars: 'Stargazers', forks: 'Forks', license: 'License' })[sub] : ''}`)).replace(/__SUB__/g, sub).replace(/__DESC__/g, esc(d.description || `${d.owner}/${d.name} on GitHub`))
-        .replace(/__URL__/g, esc(`https://gh.lapius7.com/repos/${d.owner}/${d.name}${sub ? '/' + sub : ''}`)).replace(/__IMG__/g, esc(`https://opengraph.githubassets.com/1/${d.owner}/${d.name}`));
+        .replace(/__TITLE__/g, esc(`${d.owner}/${d.name}${sub ? ' · ' + ({ issues: 'Issues', stars: 'Stargazers', forks: 'Forks', license: 'License' })[sub] : fpath ? ' · ' + fpath : ''}`)).replace(/__SUB__/g, sub).replace(/__DESC__/g, esc(d.description || `${d.owner}/${d.name} on GitHub`))
+        .replace(/__URL__/g, esc(`https://gh.lapius7.com${base}${sub ? '/' + sub : rest.length ? '/' + rest.map(encodeURIComponent).join('/') : ''}`)).replace(/__IMG__/g, esc(`https://opengraph.githubassets.com/1/${d.owner}/${d.name}`));
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
       return res.end(html);
     } catch (e) { console.error(e.message); res.writeHead(404); return res.end(); }

@@ -17,7 +17,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="__IMG__">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232ecc8f'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/style.css?v=20261115b">
+<link rel="stylesheet" href="/style.css?v=20261115g">
 </head>
 <body class="loading">
 <div class="banner"><canvas id="bn"></canvas></div>
@@ -38,11 +38,13 @@
     <section class="blk code-only" id="contribBlk"><h2>Contributors</h2><div class="avs" id="contribs"></div></section>
     <section class="blk code-only"><h2>Languages</h2><div class="stack" id="stack"></div><div class="key" id="key"></div></section>
     <section class="blk code-only" id="srcBlk"><h2>Source</h2>
+      <div class="srcwrap" id="srcwrap">
       <div class="src">
         <div class="src-bar"><nav class="crumbp" id="crumb" aria-label="Path"></nav><input class="src-find" id="find" placeholder="Filter files" aria-label="Filter files" autocomplete="off" spellcheck="false"></div>
         <div class="src-files" id="files"></div>
       </div>
       <div class="viewer" id="viewer" hidden></div>
+      </div>
     </section>
     <section class="blk code-only" id="readmeBlk"><h2>README</h2><article class="md" id="readme"></article></section>
     <section class="blk code-only"><h2>Recent commits</h2><div id="commits"></div></section>
@@ -51,7 +53,7 @@
   <div class="err" id="err" hidden>Repository not found</div>
 </main>
 <script src="/common.js"></script>
-<script>
+<script type="text/page">
 (async () => {
   const p = location.pathname.replace(/^\/repos\//, '').split('/').filter(Boolean);
   try {
@@ -61,7 +63,7 @@
     $('rname').innerHTML = `<span>${esc(d.owner)}/</span>${esc(d.name)}`;
     $('rdesc').textContent = d.description || '';
     const n = (x) => Number(x).toLocaleString();
-    const base = `/repos/${d.owner}/${d.name}`, SUB = document.querySelector('meta[name=x-sub]').content;
+    const base = d.base, SUB = document.querySelector('meta[name=x-sub]').content;
     $('chips').innerHTML = [
       d.language && `<span class="chip"><i class="dot" style="background:${esc(d.langColor || '#888')}"></i>${esc(d.language)}</span>`,
       `<a class="chip" href="${base}/stars">★ ${n(d.stars)}</a>`, `<a class="chip" href="${base}/forks">⑂ ${n(d.forks)}</a>`,
@@ -89,13 +91,20 @@
     const extOf = (p) => { const b = p.split('/').pop().toLowerCase(); return b.includes('.') ? b.split('.').pop() : b; };
     const SV = { dir: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M1.5 4a1.5 1.5 0 0 1 1.5-1.5h2.9c.4 0 .8.2 1.1.5l.9 1h4.6A1.5 1.5 0 0 1 14 5.5v6A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5z" fill="currentColor"/></svg>', file: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M4 1.7h4.6L12.3 5.4V13.5a.8.8 0 0 1-.8.8H4a.8.8 0 0 1-.8-.8v-11a.8.8 0 0 1 .8-.8z"/><path d="M8.4 1.9v3.6h3.6"/></svg>', up: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 4 3 7.5 6.5 11M3.5 7.5h6a3 3 0 0 1 3 3V12"/></svg>' };
     const ico = (p, dir) => dir ? `<span class="fi dir">${SV.dir}</span>` : `<span class="fi" style="color:${FC[extOf(p)] || 'var(--muted)'}">${SV.file}</span>`;
-    const href = (p, dir) => `${location.pathname}#/${p.split('/').filter(Boolean).map(encodeURIComponent).join('/')}${dir && p ? '/' : ''}`;
-    const parseHash = () => {
-      const raw = location.hash.slice(1);
-      if (!raw.startsWith('/')) return { p: '' };
-      const [pp, ln] = raw.slice(1).split('#');
-      const p = pp.split('/').filter(Boolean).map((x) => { try { return decodeURIComponent(x); } catch { return x; } }).join('/');
-      const m = /^L(\d+)(?:-L?(\d+))?$/.exec(ln || '');
+    const enc = (p) => p.split('/').filter(Boolean).map(encodeURIComponent).join('/');
+    const href = (p) => p ? `${base}/${encodeURIComponent(d.defaultBranch)}/${enc(p)}` : base;
+    const SUBW = ['issue', 'issues', 'star', 'stars', 'stargazers', 'fork', 'forks', 'license', 'licence'];
+    const lc = (x) => (x || '').toLowerCase();
+    // path after /repos/ -> segments following the repo name (null when the URL is for another repo)
+    const restOf = (path) => {
+      const ps = path.split('/').filter(Boolean).slice(1).map((x) => { try { return decodeURIComponent(x); } catch { return x; } });
+      if (lc(ps[0]) === lc(d.owner) && lc(ps[1]) === lc(d.name)) return ps.slice(2);
+      if (lc(ps[0]) === lc(d.name)) return ps.slice(1);
+      return null;
+    };
+    const parseLoc = () => {
+      const p = (restOf(location.pathname) || []).slice(1).join('/');
+      const m = /^#L(\d+)(?:-L?(\d+))?$/.exec(location.hash);
       return { p, a: m ? +m[1] : 0, b: m ? +(m[2] || m[1]) : 0 };
     };
     let curDir = null, openPath = null, flt = '', seq = 0;
@@ -138,23 +147,25 @@
       } catch { return null; }
     };
     const wrapPref = () => { try { return localStorage.getItem('srcwrap') === '1'; } catch { return false; } };
-    const hideViewer = () => { seq++; openPath = null; $('viewer').hidden = true; $('viewer').innerHTML = ''; markActive(); };
+    const hideViewer = () => { seq++; openPath = null; $('srcwrap').classList.remove('open'); $('viewer').hidden = true; $('viewer').innerHTML = ''; markActive(); };
     const open = async (p, a, b, jump) => {
       openPath = p; markActive();
       const v = $('viewer'), tok = ++seq, name = p.split('/').pop(), dirp = p.includes('/') ? p.slice(0, p.lastIndexOf('/') + 1) : '';
       const lang = EXT[extOf(p)], ghUrl = `${d.url}/blob/${encodeURIComponent(d.defaultBranch)}/${p.split('/').map(encodeURIComponent).join('/')}`;
       const rawUrl = `https://raw.githubusercontent.com/${d.owner}/${d.name}/${d.defaultBranch}/${p.split('/').map(encodeURIComponent).join('/')}`;
       const head = (meta, extra) => `<div class="v-head"><div class="v-title">${ico(p, false)}<span class="v-name"><span class="v-dir">${esc(dirp)}</span><b>${esc(name)}</b></span></div><div class="v-meta">${meta}</div><div class="v-acts">${extra || ''}<a href="${esc(rawUrl)}" target="_blank" rel="noopener">Raw</a><a href="${esc(ghUrl)}" target="_blank" rel="noopener">GitHub ↗</a><button type="button" data-a="close" aria-label="Close file">✕</button></div></div>`;
+      const fresh = !$('srcwrap').classList.contains('open');
+      $('srcwrap').classList.add('open');
       v.hidden = false;
       v.innerHTML = head('Loading…') + '<div class="v-state">Loading…</div>';
-      if (jump) v.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const reveal = () => v.scrollIntoView({ behavior: jump ? 'instant' : 'smooth', block: jump || fresh ? 'start' : 'nearest' });
       let f;
       try { f = await (await fetch(`/api/repo-file?name=${encodeURIComponent(full)}&path=${encodeURIComponent(p)}&ref=${encodeURIComponent(d.defaultBranch)}`)).json(); }
       catch { if (tok === seq) v.innerHTML = head('') + '<div class="v-state">Failed to load</div>'; return; }
       if (tok !== seq) return;
       if (f.text == null) {
         v.innerHTML = head(fmt(f.size)) + (IMG.test(p) ? `<div class="v-img"><img src="${esc(rawUrl)}" alt="${esc(name)}"></div>` : `<div class="v-state">Binary or large file (${fmt(f.size)}). <a href="${esc(ghUrl)}" target="_blank" rel="noopener">View on GitHub ↗</a></div>`);
-        if (!jump) v.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        reveal();
         return;
       }
       const lines = f.text.replace(/\n$/, '').split('\n');
@@ -187,19 +198,30 @@
           setTimeout(() => { btn.textContent = 'Copy'; }, 1400);
         }
       };
-      if (!jump) v.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      reveal();
       const hl = await hlLines(f.text.replace(/\n$/, ''), lang);
       if (tok !== seq || !hl || hl.length !== lines.length) return;
       code.querySelectorAll('.c').forEach((el, i) => { el.innerHTML = hl[i]; });
     };
     const route = (first) => {
-      const { p, a, b } = parseHash();
+      const { p, a, b } = parseLoc();
+      document.title = `${d.owner}/${d.name}${p ? ' · ' + p : ''} · GitHub`;
       if (!p || dirs.has(p)) { go(p); hideViewer(); return; }
       if (!d.tree.some((t) => t.p === p)) { go(''); hideViewer(); return; }
       go(p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
       open(p, a, b, first);
     };
-    addEventListener('hashchange', () => { if (!SUB) route(false); });
+    const nav = (u) => { history.pushState(null, '', u); route(false); };
+    const onLink = (e) => {
+      const a = e.target.closest('a[href]');
+      if (!a || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || a.target) return;
+      e.preventDefault(); nav(a.getAttribute('href'));
+    };
+    if (!SUB) {
+      $('files').addEventListener('click', onLink); $('crumb').addEventListener('click', onLink);
+      addEventListener('popstate', () => route(false));
+    }
+    window.SPA_PAGE = { owns: (path) => { const r = !SUB && restOf(path); return !!r && !(r.length === 1 && SUBW.includes(lc(r[0]))); }, nav };
     addEventListener('keydown', (e) => { if (e.key === 'Escape' && openPath && !document.querySelector('#cmdk.open') && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) { history.pushState(null, '', href(curDir, 1)); hideViewer(); } });
     $('rtabs').innerHTML = [['', 'Code', ''], ['issues', 'Issues', d.issues], ['stars', 'Stars', d.stars], ['forks', 'Forks', d.forks], ['license', 'License', '']]
       .map(([k, l, c]) => `<a href="${base}${k ? '/' + k : ''}" class="${k === SUB ? 'on' : ''}"${k === SUB ? ' aria-current="page"' : ''}>${l}${c !== '' ? `<span class="pill">${n(c)}</span>` : ''}</a>`).join('');
@@ -259,10 +281,11 @@
     $('commits').innerHTML = d.commits.map((c) => `<a class="item" href="${esc(c.url)}" target="_blank" rel="noopener"><div><div class="t">${esc(c.message)}</div><div class="s">${esc(c.author)}</div></div><div class="r">${ago(c.date)}</div></a>`).join('') || '<div class="empty">No commits</div>';
     $('foot').textContent = `Created ${new Date(d.createdAt).toLocaleDateString()} · ${d.defaultBranch}`;
     $('app').hidden = false;
-  } catch { $('err').hidden = false; }
+  } catch (e) { console.error("repo", e && e.stack || e); $("err").hidden = false; }
   document.body.classList.remove('loading');
 })();
 </script>
-<script src="/fx.js?v=20261115b"></script>
+<script src="/router.js?v=20261115g"></script>
+<script src="/fx.js?v=20261115g"></script>
 </body>
 </html>

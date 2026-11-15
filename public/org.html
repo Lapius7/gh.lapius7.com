@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Organization · GitHub</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232ecc8f'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/style.css?v=20261115b">
+<link rel="stylesheet" href="/style.css?v=20261115g">
 <style>
 .profile img.sq{border-radius:14px}
 .stats.s2{margin-top:0}
@@ -54,7 +54,7 @@
   <p class="foot2" id="foot"></p>
 </main>
 <script src="/common.js?v=20261012d"></script>
-<script>
+<script type="text/page">
 let repos = [];
 const stack = (parts) => { const t = parts.reduce((s,p) => s + p.v, 0) || 1;
   return [parts.map(p => `<i style="width:${p.v/t*100}%;background:${p.c}"></i>`).join(''),
@@ -147,7 +147,9 @@ $('q').oninput = drawRepos;
     });
   } catch { document.body.classList.remove('loading'); $('app').classList.remove('skeleton'); $('app').insertAdjacentHTML('afterbegin', '<div class="err">Failed to load organization.</div>'); }
 })();
+window.SPA_PAGE = { owns: (p) => p.split('/')[1] === orgName && /^\/[^/]+(\/(overview|work|activity|repos))?\/?$/.test(p), nav: (u) => { history.pushState(null, '', u); showPane(paneFromPath()); } };
 </script>
-<script src="/fx.js?v=20261115b"></script>
+<script src="/router.js?v=20261115g"></script>
+<script src="/fx.js?v=20261115g"></script>
 </body>
 </html>

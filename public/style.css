@@ -382,3 +382,27 @@ a.chip:hover{border-color:var(--muted)}a.chip:active{transform:scale(.96)}
 .lc ul{list-style:none;padding:0;font-size:13px;line-height:22px}
 .lc li{color:var(--text)}.lc li.none{color:var(--muted)}
 @media(max-width:640px){.lic-cols{grid-template-columns:1fr;gap:12px}.sb-head{flex-wrap:wrap}}
+
+/* ---- source browser: side-by-side when a file is open, scrolling lists (repo.html) ---- */
+.srcwrap{--h:min(80vh,820px)}
+.srcwrap .src-files{max-height:min(60vh,560px);overflow-y:auto;overscroll-behavior:contain}
+.srcwrap .src{display:flex;flex-direction:column;min-width:0}
+.srcwrap .src-files{flex:1;min-height:0}
+.srcwrap.open .src-files{max-height:none}
+.srcwrap.open .code{max-height:calc(var(--h) - 54px)}
+@media(min-width:1000px){
+  .srcwrap.open{display:grid;grid-template-columns:280px minmax(0,1fr);gap:12px;align-items:start;position:relative;left:50%;width:min(1120px,calc(100vw - 48px));transform:translateX(-50%);animation:srcOpen .28s cubic-bezier(.2,.8,.2,1)}
+  .srcwrap.open .src{position:sticky;top:12px;max-height:var(--h)}
+  .srcwrap.open .viewer{margin-top:0}
+  .srcwrap.open .src-bar{flex-direction:column;align-items:stretch;gap:8px;padding:10px}
+  .srcwrap.open .src-find{width:100%}
+  .srcwrap.open .fr{height:34px;padding:0 12px}
+  .srcwrap.open .fr .sz{display:none}
+}
+@media(max-width:999px){.srcwrap.open .src-files{max-height:240px}}
+@keyframes srcOpen{from{opacity:.6}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.srcwrap.open{animation:none}}
+/* page swap */
+main.spa-in{animation:spaIn .26s cubic-bezier(.2,.8,.2,1) both}
+@keyframes spaIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.srcwrap .viewer{scroll-margin-top:64px}
