@@ -165,7 +165,7 @@ function renderOg(s) {
   const cell = Math.floor((span + gap) / cols) - gap;
   const x0 = left + Math.round((span - (cols * (cell + gap) - gap)) / 2), y0 = 350;
   days.forEach((d, i) => {
-    const lvl = d.count === 0 ? 0 : Math.min(4, Math.ceil(d.count / max * 4)), [r, g, b, a] = HEAT[lvl];
+    const lvl = d.count === 0 ? 0 : Math.min(4, Math.ceil(Math.sqrt(d.count / max) * 4)), [r, g, b, a] = HEAT[lvl];
     c.rrect(x0 + Math.floor((i + first) / 7) * (cell + gap), y0 + d.weekday * (cell + gap), cell, cell, cell * 0.28, [r, g, b], a);
   });
 
