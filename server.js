@@ -362,6 +362,10 @@ const getRepoExtra = (owner, name, kind, state, page) => cached(`extra:${kind}:$
   const meta = j.license?.key ? await rest(`/licenses/${encodeURIComponent(j.license.key)}`).catch(() => ({})) : {};
   return { name: j.license?.name || j.name, spdx: j.license?.spdx_id && j.license.spdx_id !== 'NOASSERTION' ? j.license.spdx_id : '', file: j.name, url: j.html_url, size: j.size, description: meta.description || '', permissions: meta.permissions || [], conditions: meta.conditions || [], limitations: meta.limitations || [], body: Buffer.from(j.content || '', 'base64').toString('utf8') };
 });
+const getTree = (owner, name, ref) => cached(`tree:${owner}/${name}@${ref}`.toLowerCase(), 5 * 60 * 1000, async () => {
+  const t = await rest(`/repos/${owner}/${name}/git/trees/${encodeURIComponent(ref)}?recursive=1`);
+  return { tree: (t.tree || []).slice(0, 4000).map((x) => ({ p: x.path, d: x.type === 'tree' ? 1 : 0, s: x.size || 0 })), treeCut: !!t.truncated || (t.tree || []).length > 4000 };
+});
 const getFile = (owner, name, ref, p) => cached(`file:${owner}/${name}@${ref}:${p}`.toLowerCase(), 30 * 60 * 1000, async () => {
   const j = await rest(`/repos/${owner}/${name}/contents/${p.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(ref)}`);
   if (Array.isArray(j) || j.type !== 'file') throw new Error('not file');
@@ -372,15 +376,16 @@ const getFile = (owner, name, ref, p) => cached(`file:${owner}/${name}@${ref}:${
 });
 
 const LANG_COLORS = { JavaScript: '#f1e05a', TypeScript: '#3178c6', Python: '#3572A5', HTML: '#e34c26', CSS: '#563d7c', Shell: '#89e051', Go: '#00ADD8', Rust: '#dea584', Java: '#b07219', Vue: '#41b883', SCSS: '#c6538c', Dockerfile: '#384d54', 'C#': '#178600', C: '#555555', 'C++': '#f34b7d', Kotlin: '#A97BFF', Swift: '#F05138', PHP: '#4F5D95', Lua: '#000080', PowerShell: '#012456' };
-const getRepoPage = (owner, name) => cached(`repopage:${owner}/${name}`.toLowerCase(), 10 * 60 * 1000, async () => {
+const getRepoPage = (owner, name) => cached(`repopage2:${owner}/${name}`.toLowerCase(), 10 * 60 * 1000, async () => {
   const base = `/repos/${owner}/${name}`;
   const r = await rest(base);
   if (r.private) throw new Error('private');
-  const [langs, commits, rel, contribs, tree, readme] = await Promise.all([
+  const [langs, commits, rel, contribs, tree, readme, branches, tags] = await Promise.all([
     rest(base + '/languages').catch(() => ({})), rest(base + '/commits?per_page=6').catch(() => []), rest(base + '/releases/latest').catch(() => null),
     rest(base + '/contributors?per_page=24').catch(() => []),
     rest(`${base}/git/trees/${encodeURIComponent(r.default_branch)}?recursive=1`).catch(() => ({ tree: [] })),
     ghHtml(base + '/readme').catch(() => null),
+    rest(base + '/branches?per_page=100').catch(() => []), rest(base + '/tags?per_page=100').catch(() => []),
   ]);
   return {
     owner: r.owner.login, name: r.name, description: r.description, url: r.html_url, homepage: r.homepage || '', language: r.language, langColor: LANG_COLORS[r.language] || '#888',
@@ -392,6 +397,8 @@ const getRepoPage = (owner, name) => cached(`repopage:${owner}/${name}`.toLowerC
     contributors: (Array.isArray(contribs) ? contribs : []).map((c) => ({ login: c.login, avatar: c.avatar_url, url: c.html_url, n: c.contributions })),
     tree: (tree.tree || []).slice(0, 4000).map((t) => ({ p: t.path, d: t.type === 'tree' ? 1 : 0, s: t.size || 0 })),
     treeCut: !!tree.truncated || (tree.tree || []).length > 4000,
+    branches: [r.default_branch, ...(Array.isArray(branches) ? branches.map((b) => b.name) : []).filter((n) => n !== r.default_branch)],
+    tags: (Array.isArray(tags) ? tags : []).map((t) => t.name),
     readme: readme ? fixReadme(readme, owner, name, r.default_branch) : '',
   };
 });
@@ -457,12 +464,23 @@ http.createServer(async (req, res) => {
       return res.end(JSON.stringify(await getRepoExtra(owner, name, kind, st, page)));
     } catch (e) { res.writeHead(404); return res.end(); }
   }
+  if (url.pathname === '/api/repo-tree') {
+    try {
+      const [owner, name] = (url.searchParams.get('name') || '').split('/'), ref = url.searchParams.get('ref') || '';
+      const okOwner = owner && (owner.toLowerCase() === GH_USER.toLowerCase() || (await getOrgNames()).some((n) => n.login.toLowerCase() === owner.toLowerCase()));
+      if (!okOwner || !/^[A-Za-z0-9._-]+$/.test(name || '') || !ref || ref.includes('..') || !/^[A-Za-z0-9._\/@+-]+$/.test(ref)) { res.writeHead(400); return res.end(); }
+      await getRepoPage(owner, name);
+      const t = await getTree(owner, name, ref);
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=120' });
+      return res.end(JSON.stringify(t));
+    } catch (e) { res.writeHead(404); return res.end(); }
+  }
   if (url.pathname === '/api/repo-file') {
     try {
       const [owner, name] = (url.searchParams.get('name') || '').split('/');
       const p = url.searchParams.get('path') || '', ref = url.searchParams.get('ref') || '';
       const okOwner = owner && (owner.toLowerCase() === GH_USER.toLowerCase() || (await getOrgNames()).some((n) => n.login.toLowerCase() === owner.toLowerCase()));
-      if (!okOwner || !/^[A-Za-z0-9._-]+$/.test(name || '') || !p || p.includes('..') || !/^[A-Za-z0-9._\/-]+$/.test(ref)) { res.writeHead(400); return res.end(); }
+      if (!okOwner || !/^[A-Za-z0-9._-]+$/.test(name || '') || !p || p.includes('..') || !/^[A-Za-z0-9._\/@+-]+$/.test(ref)) { res.writeHead(400); return res.end(); }
       await getRepoPage(owner, name);
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' });
       return res.end(JSON.stringify(await getFile(owner, name, ref, p)));
@@ -476,11 +494,12 @@ http.createServer(async (req, res) => {
       const ownerForm = parts.length >= 2 && (await isOwner(parts[0])) && /^[A-Za-z0-9._-]+$/.test(parts[1]);
       const [owner, name] = ownerForm ? [parts[0], parts[1]] : [GH_USER, parts[0]];
       const rest = parts.slice(ownerForm ? 2 : 1);
-      let sub = '', fpath = '';
-      if (rest.length === 1 && REPO_SUBS[rest[0].toLowerCase()]) sub = REPO_SUBS[rest[0].toLowerCase()];
-      else fpath = rest.slice(1).join('/');
       if (!(await isOwner(owner)) || !/^[A-Za-z0-9._-]+$/.test(name || '')) { res.writeHead(404); return res.end(); }
       const d0 = await getRepoPage(owner, name);
+      let sub = '', fpath = '';
+      const joined = rest.join('/'), refs = [...d0.branches, ...d0.tags].filter((b) => joined === b || joined.startsWith(b + '/')).sort((a, b) => b.length - a.length);
+      if (rest.length === 1 && REPO_SUBS[rest[0].toLowerCase()] && !refs.length) sub = REPO_SUBS[rest[0].toLowerCase()];
+      else fpath = refs.length ? joined.slice(refs[0].length + 1) : rest.slice(1).join('/');
       const base = owner.toLowerCase() === GH_USER.toLowerCase() ? `/repos/${d0.name}` : `/repos/${d0.owner}/${d0.name}`;
       const d = { ...d0, base };
       if (url.pathname === '/api/repo') {

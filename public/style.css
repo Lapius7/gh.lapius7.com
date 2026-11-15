@@ -406,3 +406,11 @@ a.chip:hover{border-color:var(--muted)}a.chip:active{transform:scale(.96)}
 main.spa-in{animation:spaIn .26s cubic-bezier(.2,.8,.2,1) both}
 @keyframes spaIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .srcwrap .viewer{scroll-margin-top:64px}
+
+/* branch / tag switcher */
+.src-tools{display:flex;align-items:center;gap:8px;flex:none}
+.src-ref{flex:none;max-width:150px;height:30px;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:0 26px 0 10px;font:inherit;font-size:12px;line-height:20px;outline:0;cursor:pointer;text-overflow:ellipsis;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%23888' stroke-width='1.5'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;transition:border-color .15s,box-shadow .15s}
+.src-ref:hover,.src-ref:focus-visible{border-color:var(--muted)}
+.src-ref option,.src-ref optgroup{background:var(--panel);color:var(--text)}
+@media(min-width:1000px){.srcwrap.open .src-tools{width:100%}.srcwrap.open .src-ref{flex:none;max-width:48%}.srcwrap.open .src-find{flex:1;min-width:0}}
+@media(max-width:640px){.src-tools{flex-wrap:wrap;justify-content:flex-end}}

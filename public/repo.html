@@ -17,7 +17,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="__IMG__">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232ecc8f'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/style.css?v=20261115g">
+<link rel="stylesheet" href="/style.css?v=20261115h">
 </head>
 <body class="loading">
 <div class="banner"><canvas id="bn"></canvas></div>
@@ -40,8 +40,9 @@
     <section class="blk code-only" id="srcBlk"><h2>Source</h2>
       <div class="srcwrap" id="srcwrap">
       <div class="src">
-        <div class="src-bar"><nav class="crumbp" id="crumb" aria-label="Path"></nav><input class="src-find" id="find" placeholder="Filter files" aria-label="Filter files" autocomplete="off" spellcheck="false"></div>
+        <div class="src-bar"><nav class="crumbp" id="crumb" aria-label="Path"></nav><div class="src-tools"><select class="src-ref" id="refSel" aria-label="Branch or tag"></select><input class="src-find" id="find" placeholder="Filter files" aria-label="Filter files" autocomplete="off" spellcheck="false"></div></div>
         <div class="src-files" id="files"></div>
+        <div class="src-empty" id="cutnote" hidden>File list truncated</div>
       </div>
       <div class="viewer" id="viewer" hidden></div>
       </div>
@@ -81,8 +82,11 @@
     if (!d.contributors.length) $('contribBlk').hidden = true;
     if (d.readme) $('readme').innerHTML = d.readme; else $('readmeBlk').hidden = true;
     // ---- source browser ----
-    const full = d.owner + '/' + d.name, kids = {}, dirs = new Set();
-    d.tree.forEach((t) => { const i = t.p.lastIndexOf('/'); (kids[i < 0 ? '' : t.p.slice(0, i)] ||= []).push(t); if (t.d) dirs.add(t.p); });
+    const full = d.owner + '/' + d.name;
+    let kids = {}, dirs = new Set(), tree = d.tree, treeCut = d.treeCut, curRef = d.defaultBranch, refSeq = 0, refBad = false;
+    const REFS = [...d.branches, ...d.tags];
+    const build = () => { kids = {}; dirs = new Set(); tree.forEach((t) => { const i = t.p.lastIndexOf('/'); (kids[i < 0 ? '' : t.p.slice(0, i)] ||= []).push(t); if (t.d) dirs.add(t.p); }); };
+    build();
     const fmt = (b) => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(1) + ' MB';
     const EXT = { ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript', json: 'json', css: 'css', scss: 'scss', html: 'xml', xml: 'xml', svg: 'xml', py: 'python', rs: 'rust', go: 'go', sh: 'bash', bash: 'bash', zsh: 'bash', md: 'markdown', yml: 'yaml', yaml: 'yaml', toml: 'ini', ini: 'ini', java: 'java', kt: 'kotlin', c: 'c', h: 'c', cpp: 'cpp', cs: 'csharp', php: 'php', rb: 'ruby', sql: 'sql', lua: 'lua', swift: 'swift', ps1: 'powershell', vue: 'xml', nsi: 'ini', dockerfile: 'dockerfile' };
     const LN = { typescript: 'TypeScript', javascript: 'JavaScript', json: 'JSON', css: 'CSS', scss: 'SCSS', xml: 'HTML / XML', python: 'Python', rust: 'Rust', go: 'Go', bash: 'Shell', markdown: 'Markdown', yaml: 'YAML', ini: 'Config', java: 'Java', kotlin: 'Kotlin', c: 'C', cpp: 'C++', csharp: 'C#', php: 'PHP', ruby: 'Ruby', sql: 'SQL', lua: 'Lua', swift: 'Swift', powershell: 'PowerShell', dockerfile: 'Dockerfile' };
@@ -92,7 +96,14 @@
     const SV = { dir: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M1.5 4a1.5 1.5 0 0 1 1.5-1.5h2.9c.4 0 .8.2 1.1.5l.9 1h4.6A1.5 1.5 0 0 1 14 5.5v6A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5z" fill="currentColor"/></svg>', file: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M4 1.7h4.6L12.3 5.4V13.5a.8.8 0 0 1-.8.8H4a.8.8 0 0 1-.8-.8v-11a.8.8 0 0 1 .8-.8z"/><path d="M8.4 1.9v3.6h3.6"/></svg>', up: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 4 3 7.5 6.5 11M3.5 7.5h6a3 3 0 0 1 3 3V12"/></svg>' };
     const ico = (p, dir) => dir ? `<span class="fi dir">${SV.dir}</span>` : `<span class="fi" style="color:${FC[extOf(p)] || 'var(--muted)'}">${SV.file}</span>`;
     const enc = (p) => p.split('/').filter(Boolean).map(encodeURIComponent).join('/');
-    const href = (p) => p ? `${base}/${encodeURIComponent(d.defaultBranch)}/${enc(p)}` : base;
+    const encRef = (r) => r.split('/').map(encodeURIComponent).join('/');
+    const href = (p, ref = curRef) => p ? `${base}/${encRef(ref)}/${enc(p)}` : ref === d.defaultBranch ? base : `${base}/${encRef(ref)}`;
+    // longest known branch/tag that prefixes the remaining segments; unknown refs fall back to the first segment
+    const splitRef = (rest) => {
+      const j = rest.join('/'), hit = REFS.filter((b) => j === b || j.startsWith(b + '/')).sort((a, b) => b.length - a.length)[0];
+      if (hit) return { ref: hit, p: j.slice(hit.length + 1) };
+      return rest.length ? { ref: rest[0], p: rest.slice(1).join('/') } : { ref: d.defaultBranch, p: '' };
+    };
     const SUBW = ['issue', 'issues', 'star', 'stars', 'stargazers', 'fork', 'forks', 'license', 'licence'];
     const lc = (x) => (x || '').toLowerCase();
     // path after /repos/ -> segments following the repo name (null when the URL is for another repo)
@@ -103,23 +114,23 @@
       return null;
     };
     const parseLoc = () => {
-      const p = (restOf(location.pathname) || []).slice(1).join('/');
+      const { ref, p } = splitRef(restOf(location.pathname) || []);
       const m = /^#L(\d+)(?:-L?(\d+))?$/.exec(location.hash);
-      return { p, a: m ? +m[1] : 0, b: m ? +(m[2] || m[1]) : 0 };
+      return { ref, p, a: m ? +m[1] : 0, b: m ? +(m[2] || m[1]) : 0 };
     };
     let curDir = null, openPath = null, flt = '', seq = 0;
     const markActive = () => document.querySelectorAll('#files .fr').forEach((a) => a.classList.toggle('on', a.dataset.p === openPath));
     const drawList = () => {
       const q = flt.trim().toLowerCase(), nm = (t) => t.p.split('/').pop();
       const rows = (kids[curDir] || []).slice().sort((a, b) => b.d - a.d || a.p.localeCompare(b.p)).filter((t) => !q || nm(t).toLowerCase().includes(q));
-      const up = curDir && !q ? `<a class="fr up" href="${esc(href(curDir.includes('/') ? curDir.slice(0, curDir.lastIndexOf('/')) : '', 1))}"><span class="fi">${SV.up}</span><span class="nm">Parent directory</span></a>` : '';
-      $('files').innerHTML = up + rows.map((t, i) => `<a class="fr${t.p === openPath ? ' on' : ''}" style="--i:${Math.min(i, 14)}" href="${esc(href(t.p, t.d))}" data-p="${esc(t.p)}">${ico(t.p, t.d)}<span class="nm">${esc(nm(t))}</span><span class="sz">${t.d ? (kids[t.p] || []).length + ' items' : fmt(t.s)}</span></a>`).join('') || `<div class="src-empty">${q ? 'No matching files' : 'Empty'}</div>`;
+      const up = curDir && !q ? `<a class="fr up" href="${esc(href(curDir.includes('/') ? curDir.slice(0, curDir.lastIndexOf('/')) : ''))}"><span class="fi">${SV.up}</span><span class="nm">Parent directory</span></a>` : '';
+      $('files').innerHTML = up + rows.map((t, i) => `<a class="fr${t.p === openPath ? ' on' : ''}" style="--i:${Math.min(i, 14)}" href="${esc(href(t.p))}" data-p="${esc(t.p)}">${ico(t.p, t.d)}<span class="nm">${esc(nm(t))}</span><span class="sz">${t.d ? (kids[t.p] || []).length + ' items' : fmt(t.s)}</span></a>`).join('') || `<div class="src-empty">${q ? 'No matching files' : 'Empty'}</div>`;
     };
     const go = (dir) => {
       if (dir === curDir) return;
       curDir = dir; flt = ''; $('find').value = '';
       const parts = dir ? dir.split('/') : [];
-      $('crumb').innerHTML = `<a href="${esc(href('', 1))}"${parts.length ? '' : ' aria-current="page"'}>${esc(d.name)}</a>` + parts.map((x, i) => `<i class="sep">/</i><a href="${esc(href(parts.slice(0, i + 1).join('/'), 1))}"${i === parts.length - 1 ? ' aria-current="page"' : ''}>${esc(x)}</a>`).join('');
+      $('crumb').innerHTML = `<a href="${esc(href(''))}"${parts.length ? '' : ' aria-current="page"'}>${esc(d.name)}</a>` + parts.map((x, i) => `<i class="sep">/</i><a href="${esc(href(parts.slice(0, i + 1).join('/')))}"${i === parts.length - 1 ? ' aria-current="page"' : ''}>${esc(x)}</a>`).join('');
       drawList();
     };
     $('find').oninput = (e) => { flt = e.target.value; drawList(); };
@@ -151,8 +162,8 @@
     const open = async (p, a, b, jump) => {
       openPath = p; markActive();
       const v = $('viewer'), tok = ++seq, name = p.split('/').pop(), dirp = p.includes('/') ? p.slice(0, p.lastIndexOf('/') + 1) : '';
-      const lang = EXT[extOf(p)], ghUrl = `${d.url}/blob/${encodeURIComponent(d.defaultBranch)}/${p.split('/').map(encodeURIComponent).join('/')}`;
-      const rawUrl = `https://raw.githubusercontent.com/${d.owner}/${d.name}/${d.defaultBranch}/${p.split('/').map(encodeURIComponent).join('/')}`;
+      const lang = EXT[extOf(p)], ghUrl = `${d.url}/blob/${encRef(curRef)}/${enc(p)}`;
+      const rawUrl = `https://raw.githubusercontent.com/${d.owner}/${d.name}/${encRef(curRef)}/${enc(p)}`;
       const head = (meta, extra) => `<div class="v-head"><div class="v-title">${ico(p, false)}<span class="v-name"><span class="v-dir">${esc(dirp)}</span><b>${esc(name)}</b></span></div><div class="v-meta">${meta}</div><div class="v-acts">${extra || ''}<a href="${esc(rawUrl)}" target="_blank" rel="noopener">Raw</a><a href="${esc(ghUrl)}" target="_blank" rel="noopener">GitHub ↗</a><button type="button" data-a="close" aria-label="Close file">✕</button></div></div>`;
       const fresh = !$('srcwrap').classList.contains('open');
       $('srcwrap').classList.add('open');
@@ -160,7 +171,7 @@
       v.innerHTML = head('Loading…') + '<div class="v-state">Loading…</div>';
       const reveal = () => v.scrollIntoView({ behavior: jump ? 'instant' : 'smooth', block: jump || fresh ? 'start' : 'nearest' });
       let f;
-      try { f = await (await fetch(`/api/repo-file?name=${encodeURIComponent(full)}&path=${encodeURIComponent(p)}&ref=${encodeURIComponent(d.defaultBranch)}`)).json(); }
+      try { f = await (await fetch(`/api/repo-file?name=${encodeURIComponent(full)}&path=${encodeURIComponent(p)}&ref=${encodeURIComponent(curRef)}`)).json(); }
       catch { if (tok === seq) v.innerHTML = head('') + '<div class="v-state">Failed to load</div>'; return; }
       if (tok !== seq) return;
       if (f.text == null) {
@@ -190,7 +201,7 @@
       };
       v.querySelector('.v-acts').onclick = async (e) => {
         const btn = e.target.closest('button'); if (!btn) return;
-        if (btn.dataset.a === 'close') { history.pushState(null, '', href(curDir, 1)); hideViewer(); }
+        if (btn.dataset.a === 'close') { history.pushState(null, '', href(curDir)); hideViewer(); }
         else if (btn.dataset.a === 'wrap') { const on = !code.classList.contains('wrap'); code.classList.toggle('wrap', on); btn.setAttribute('aria-pressed', on); try { localStorage.setItem('srcwrap', on ? '1' : '0'); } catch {} }
         else if (btn.dataset.a === 'copy') {
           const txt = selA ? lines.slice(lo() - 1, hi()).join('\n') : f.text;
@@ -203,14 +214,35 @@
       if (tok !== seq || !hl || hl.length !== lines.length) return;
       code.querySelectorAll('.c').forEach((el, i) => { el.innerHTML = hl[i]; });
     };
-    const route = (first) => {
-      const { p, a, b } = parseLoc();
+    const syncRef = () => {
+      const sel = $('refSel'), opt = (n) => `<option value="${esc(n)}">${esc(n)}</option>`;
+      sel.innerHTML = `<optgroup label="Branches">${d.branches.map(opt).join('')}</optgroup>` + (d.tags.length ? `<optgroup label="Tags">${d.tags.map(opt).join('')}</optgroup>` : '') + (REFS.includes(curRef) ? '' : opt(curRef));
+      sel.value = curRef; $('cutnote').hidden = !treeCut;
+    };
+    const setRef = async (ref) => {
+      const my = ++refSeq;
+      let t = null;
+      if (ref === d.defaultBranch) t = { tree: d.tree, treeCut: d.treeCut };
+      else {
+        $('files').innerHTML = '<div class="src-empty">Loading…</div>';
+        try { const r = await fetch(`/api/repo-tree?name=${encodeURIComponent(full)}&ref=${encodeURIComponent(ref)}`); if (r.ok) t = await r.json(); } catch {}
+      }
+      if (my !== refSeq) return false;
+      curRef = ref; tree = t ? t.tree : []; treeCut = !!(t && t.treeCut); build(); curDir = null; syncRef();
+      refBad = !t;
+      if (refBad) $('files').innerHTML = '<div class="src-empty">Branch or tag not found</div>';
+      return true;
+    };
+    const route = async (first) => {
+      const { ref, p, a, b } = parseLoc();
       document.title = `${d.owner}/${d.name}${p ? ' · ' + p : ''} · GitHub`;
+      if (ref !== curRef) { hideViewer(); if (!(await setRef(ref)) || refBad) return; }
       if (!p || dirs.has(p)) { go(p); hideViewer(); return; }
-      if (!d.tree.some((t) => t.p === p)) { go(''); hideViewer(); return; }
+      if (!tree.some((t) => t.p === p)) { history.replaceState(null, '', href('')); go(''); hideViewer(); return; }
       go(p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
       open(p, a, b, first);
     };
+    $('refSel').onchange = (e) => nav(href(openPath || curDir || '', e.target.value));
     const nav = (u) => { history.pushState(null, '', u); route(false); };
     const onLink = (e) => {
       const a = e.target.closest('a[href]');
@@ -222,7 +254,7 @@
       addEventListener('popstate', () => route(false));
     }
     window.SPA_PAGE = { owns: (path) => { const r = !SUB && restOf(path); return !!r && !(r.length === 1 && SUBW.includes(lc(r[0]))); }, nav };
-    addEventListener('keydown', (e) => { if (e.key === 'Escape' && openPath && !document.querySelector('#cmdk.open') && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) { history.pushState(null, '', href(curDir, 1)); hideViewer(); } });
+    addEventListener('keydown', (e) => { if (e.key === 'Escape' && openPath && !document.querySelector('#cmdk.open') && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) { history.pushState(null, '', href(curDir)); hideViewer(); } });
     $('rtabs').innerHTML = [['', 'Code', ''], ['issues', 'Issues', d.issues], ['stars', 'Stars', d.stars], ['forks', 'Forks', d.forks], ['license', 'License', '']]
       .map(([k, l, c]) => `<a href="${base}${k ? '/' + k : ''}" class="${k === SUB ? 'on' : ''}"${k === SUB ? ' aria-current="page"' : ''}>${l}${c !== '' ? `<span class="pill">${n(c)}</span>` : ''}</a>`).join('');
     $('app').hidden = false;
@@ -277,7 +309,7 @@
         })();
       }
     } else route(true);
-    if (!SUB && d.treeCut) $('files').insertAdjacentHTML('afterend', '<div class="src-empty">File list truncated</div>');
+    syncRef();
     $('commits').innerHTML = d.commits.map((c) => `<a class="item" href="${esc(c.url)}" target="_blank" rel="noopener"><div><div class="t">${esc(c.message)}</div><div class="s">${esc(c.author)}</div></div><div class="r">${ago(c.date)}</div></a>`).join('') || '<div class="empty">No commits</div>';
     $('foot').textContent = `Created ${new Date(d.createdAt).toLocaleDateString()} · ${d.defaultBranch}`;
     $('app').hidden = false;
@@ -285,7 +317,7 @@
   document.body.classList.remove('loading');
 })();
 </script>
-<script src="/router.js?v=20261115g"></script>
-<script src="/fx.js?v=20261115g"></script>
+<script src="/router.js?v=20261115h"></script>
+<script src="/fx.js?v=20261115h"></script>
 </body>
 </html>
