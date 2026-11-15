@@ -17,7 +17,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="__IMG__">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232ecc8f'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/style.css?v=20261115i">
+<link rel="stylesheet" href="/style.css?v=20261115j">
 </head>
 <body class="loading">
 <div class="banner"><canvas id="bn"></canvas></div>
@@ -104,6 +104,7 @@
       if (hit) return { ref: hit, p: j.slice(hit.length + 1) };
       return rest.length ? { ref: rest[0], p: rest.slice(1).join('/') } : { ref: d.defaultBranch, p: '' };
     };
+    const special = (r) => { const w = lc(r[0]); return !REFS.some((b) => r.join('/') === b || r.join('/').startsWith(b + '/')) && r.length >= 2 && ((['pull', 'pulls', 'issue', 'issues'].includes(w) && /^\d+$/.test(r[1])) || (['commit', 'commits'].includes(w) && /^[0-9a-f]{7,40}$/i.test(r[1]))); };
     const SUBW = ['issue', 'issues', 'star', 'stars', 'stargazers', 'fork', 'forks', 'license', 'licence'];
     const lc = (x) => (x || '').toLowerCase();
     // path after /repos/ -> segments following the repo name (null when the URL is for another repo)
@@ -254,10 +255,11 @@
       $('files').addEventListener('click', onLink); $('crumb').addEventListener('click', onLink);
       addEventListener('popstate', () => route(false));
     }
-    window.SPA_PAGE = { owns: (path) => { const r = !SUB && restOf(path); return !!r && !(r.length === 1 && SUBW.includes(lc(r[0]))); }, nav };
+    window.SPA_PAGE = { owns: (path) => { const r = !SUB && restOf(path); return !!r && !(r.length === 1 && SUBW.includes(lc(r[0]))) && !special(r); }, nav };
     addEventListener('keydown', (e) => { if (e.key === 'Escape' && openPath && !document.querySelector('#cmdk.open') && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) { history.pushState(null, '', href(curDir)); hideViewer(); } });
+    const TAB = SUB === 'thread' ? 'issues' : SUB;
     $('rtabs').innerHTML = [['', 'Code', ''], ['issues', 'Issues', d.issues], ['stars', 'Stars', d.stars], ['forks', 'Forks', d.forks], ['license', 'License', '']]
-      .map(([k, l, c]) => `<a href="${base}${k ? '/' + k : ''}" class="${k === SUB ? 'on' : ''}"${k === SUB ? ' aria-current="page"' : ''}>${l}${c !== '' ? `<span class="pill">${n(c)}</span>` : ''}</a>`).join('');
+      .map(([k, l, c]) => `<a href="${base}${k ? '/' + k : ''}" class="${k === TAB ? 'on' : ''}"${k === TAB ? ' aria-current="page"' : ''}>${l}${c !== '' ? `<span class="pill">${n(c)}</span>` : ''}</a>`).join('');
     $('app').hidden = false;
     if (SUB) {
       $('app').classList.add('sub'); $('subBlk').hidden = false;
@@ -285,10 +287,59 @@
         return load;
       };
       const shell = (title, ctl) => { blk.innerHTML = `<div class="sb-head"><h2>${title}</h2>${ctl || ''}</div><div class="sb-list"></div><div class="sb-more"></div>`; };
-      if (SUB === 'issues') {
+      if (SUB === 'thread' || SUB === 'commit') {
+      const n_ = (x) => Number(x).toLocaleString();
+      const parts = restOf(location.pathname) || [];
+      const A = (u) => `<img class="th-av" src="${esc(u.avatar)}${u.avatar ? '&s=48' : ''}" alt="" loading="lazy">`;
+      const ROLE = { OWNER: 'Owner', MEMBER: 'Member', COLLABORATOR: 'Collaborator', CONTRIBUTOR: 'Contributor' };
+      const role = (a) => (ROLE[a] ? `<span class="th-role">${ROLE[a]}</span>` : '');
+      const labelsOf = (l) => l.map((x) => `<span class="lb" style="--c:#${esc(x.color)}">${esc(x.name)}</span>`).join('');
+      const dline = (l) => { const c = l[0] === '+' ? 'a' : l[0] === '-' ? 'd' : l.startsWith('@@') ? 'h' : ''; return `<div class="dl ${c}">${esc(l) || ' '}</div>`; };
+      const diffs = (files, cut) => {
+        const tot = files.reduce((s, f) => [s[0] + f.add, s[1] + f.del], [0, 0]);
+        const rows = files.map((f) => `<details class="df"${files.length <= 12 ? ' open' : ''}><summary><span class="df-n">${esc(f.prev ? f.prev + ' → ' : '')}${esc(f.name)}</span><span class="df-s"><b class="pa">+${f.add}</b> <b class="pd">−${f.del}</b></span></summary>${f.patch ? `<div class="dp">${f.patch.split('\n').map(dline).join('')}</div>` : `<div class="src-empty">${f.status === 'renamed' ? 'Renamed without changes' : 'No text diff (binary or too large)'} · <a href="${esc(f.blob)}" target="_blank" rel="noopener">View on GitHub ↗</a></div>`}</details>`).join('');
+        return `<div class="df-sum"><b>${files.length}${cut ? '+' : ''}</b> files changed · <b class="pa">+${tot[0]}</b> <b class="pd">−${tot[1]}</b></div>${rows}${cut ? '<p class="th-note">Showing the first files only.</p>' : ''}`;
+      };
+      const get = async (path) => { const r = await fetch(path); if (!r.ok) throw 0; return r.json(); };
+      const fail = (t) => { blk.innerHTML = `<div class="src"><div class="src-empty">${t}</div></div>`; };
+      const stateOf = (t) => (t.merged ? ['merged', 'Merged'] : t.draft ? ['draft', 'Draft'] : t.state === 'open' ? ['open', 'Open'] : [t.kind === 'pull' ? 'closed' : (t.reason === 'not_planned' ? 'closed' : 'done'), t.kind === 'issue' && t.reason !== 'not_planned' ? 'Closed' : 'Closed']);
+      const card = (u, at, body, extra) => `<div class="th-card">${A(u)}<div class="th-box"><div class="th-hd"><a href="${esc(u.url)}" target="_blank" rel="noopener"><b>${esc(u.login)}</b></a>${extra || ''}<span class="th-at">${ago(at)}</span></div><div class="md th-body">${body || '<p class="th-none">No description provided.</p>'}</div></div></div>`;
+      const REVS = { APPROVED: ['ok', 'approved these changes'], CHANGES_REQUESTED: ['no', 'requested changes'], COMMENTED: ['', 'reviewed'], DISMISSED: ['', 'review dismissed'] };
+      const tl = (e) => {
+        if (e.k === 'c') return card(e.user, e.at, e.body, role(e.assoc));
+        const [cls, txt] = REVS[e.state] || ['', 'reviewed'];
+        const inl = e.inline.map((c) => `<div class="th-inl"><div class="th-ip">${esc(c.path)}${c.line ? ':' + c.line : ''}</div><div class="th-hd"><b>${esc(c.user.login)}</b></div><div class="md th-body">${c.body}</div></div>`).join('');
+        return `<div class="th-card">${A(e.user)}<div class="th-box"><div class="th-hd"><a href="${esc(e.user.url)}" target="_blank" rel="noopener"><b>${esc(e.user.login)}</b></a><span class="th-rv ${cls}">${txt}</span><span class="th-at">${ago(e.at)}</span></div>${e.body ? `<div class="md th-body">${e.body}</div>` : ''}${inl}</div></div>`;
+      };
+      (async () => {
+        try {
+          if (SUB === 'commit') {
+            const c = await get(`/api/repo-commit?name=${encodeURIComponent(full)}&sha=${encodeURIComponent(parts[1])}`);
+            const [head, ...rest] = c.msg.split('\n');
+            blk.innerHTML = `<div class="th-top"><h2 class="th-title">${esc(head)}</h2></div>${rest.join('\n').trim() ? `<pre class="th-msg">${esc(rest.join('\n').trim())}</pre>` : ''}<div class="th-meta">${c.author.login !== 'ghost' ? A(c.author) : ''}<span><b>${esc(c.author.login !== 'ghost' ? c.author.login : c.authorName)}</b> committed ${ago(c.at)}</span><code class="th-sha">${esc(c.sha.slice(0, 7))}</code>${c.parents.map((p) => `<a class="th-par" href="${base}/commit/${esc(p)}">parent ${esc(p.slice(0, 7))}</a>`).join('')}<a class="th-gh" href="${esc(c.url)}" target="_blank" rel="noopener">GitHub ↗</a></div>${diffs(c.files, c.filesCut)}`;
+            return;
+          }
+          const n = parts[1], part = (parts[2] || '').toLowerCase();
+          const t = await get(`/api/repo-thread?name=${encodeURIComponent(full)}&n=${encodeURIComponent(n)}`);
+          const [sc, sl] = stateOf(t), pr = t.kind === 'pull', root = `${base}/${pr ? 'pull' : 'issues'}/${t.n}`;
+          let tabs = '', main = '';
+          if (pr) {
+            tabs = `<nav class="th-tabs"><a href="${root}" class="${part ? '' : 'on'}">Conversation<span class="pill">${n_(t.commentsCount)}</span></a><a href="${root}/commits" class="${part === 'commits' ? 'on' : ''}">Commits<span class="pill">${t.info.commits}</span></a><a href="${root}/files" class="${part === 'files' ? 'on' : ''}">Files changed<span class="pill">${t.info.files}</span></a></nav>`;
+          }
+          const hd = `<div class="th-top"><h2 class="th-title">${esc(t.title)} <span class="th-num">#${t.n}</span></h2><div class="th-sub"><span class="th-st ${sc}">${sl}</span><span>${pr && t.merged ? `<b>${esc((t.mergedBy || t.author).login)}</b> merged ${ago(t.mergedAt)}` : `<b>${esc(t.author.login)}</b> opened ${ago(t.at)}`}${pr ? ` · <code>${esc(t.info.head)}</code> → <code>${esc(t.info.base)}</code>` : ''}</span><a class="th-gh" href="${esc(t.url)}" target="_blank" rel="noopener">GitHub ↗</a></div></div>${tabs}`;
+          if (pr && part === 'files') main = diffs((await get(`/api/repo-thread?name=${encodeURIComponent(full)}&n=${t.n}&part=files`)).files, t.info.files > 100);
+          else if (pr && part === 'commits') main = `<div class="sb-list rows">${(await get(`/api/repo-thread?name=${encodeURIComponent(full)}&n=${t.n}&part=commits`)).commits.map((c) => `<a class="ir" href="${base}/commit/${esc(c.sha)}"><div class="ib"><div class="it">${esc(c.msg)}</div><div class="is">${esc(c.author)} · ${ago(c.at)}</div></div><span class="ic">${esc(c.sha.slice(0, 7))}</span></a>`).join('')}</div>`;
+          else {
+            const meta = [t.labels.length && `<div class="th-row"><span>Labels</span>${labelsOf(t.labels)}</div>`, t.assignees.length && `<div class="th-row"><span>Assignees</span>${t.assignees.map((u) => `<a href="${esc(u.url)}" target="_blank" rel="noopener">${esc(u.login)}</a>`).join(', ')}</div>`, t.milestone && `<div class="th-row"><span>Milestone</span>${esc(t.milestone)}</div>`, pr && `<div class="th-row"><span>Changes</span><b class="pa">+${t.info.additions}</b> <b class="pd">−${t.info.deletions}</b> in ${t.info.files} files</div>`].filter(Boolean).join('');
+            main = `${meta ? `<div class="th-meta2">${meta}</div>` : ''}<div class="th-tl">${card(t.author, t.at, t.body, role(t.assoc))}${t.timeline.map(tl).join('')}</div>${t.commentsCut ? '<p class="th-note">Showing the first 100 comments. <a href="' + esc(t.url) + '" target="_blank" rel="noopener">See the rest on GitHub ↗</a></p>' : ''}`;
+          }
+          blk.innerHTML = hd + main;
+        } catch { fail(SUB === 'commit' ? 'Commit not found' : 'Not found'); }
+      })();
+      } else if (SUB === 'issues') {
         let st = 'open';
         shell('Issues and pull requests', '<div class="seg" role="group" aria-label="State"><button type="button" data-s="open" aria-pressed="true">Open</button><button type="button" data-s="closed" aria-pressed="false">Closed</button></div>');
-        const row = (i) => `<a class="ir" href="${esc(i.url)}" target="_blank" rel="noopener"><span class="ist ${i.pr ? 'pr ' : ''}${i.merged ? 'merged' : i.state}" role="img" aria-label="${i.pr ? 'Pull request, ' : 'Issue, '}${i.merged ? 'merged' : i.state}"></span><div class="ib"><div class="it">${esc(i.title)}${i.labels.map((l) => `<span class="lb" style="--c:#${l.color}">${esc(l.name)}</span>`).join('')}</div><div class="is">#${i.n} ${i.state === 'open' ? 'opened ' + ago(i.at) : (i.merged ? 'merged ' : 'closed ') + ago(i.closedAt || i.at)} by ${esc(i.author)}${i.pr ? ' · pull request' : ''}</div></div>${i.comments ? `<span class="ic">${SVC}${i.comments}</span>` : ''}</a>`;
+        const row = (i) => `<a class="ir" href="${base}/${i.pr ? 'pull' : 'issues'}/${i.n}"><span class="ist ${i.pr ? 'pr ' : ''}${i.merged ? 'merged' : i.state}" role="img" aria-label="${i.pr ? 'Pull request, ' : 'Issue, '}${i.merged ? 'merged' : i.state}"></span><div class="ib"><div class="it">${esc(i.title)}${i.labels.map((l) => `<span class="lb" style="--c:#${l.color}">${esc(l.name)}</span>`).join('')}</div><div class="is">#${i.n} ${i.state === 'open' ? 'opened ' + ago(i.at) : (i.merged ? 'merged ' : 'closed ') + ago(i.closedAt || i.at)} by ${esc(i.author)}${i.pr ? ' · pull request' : ''}</div></div>${i.comments ? `<span class="ic">${SVC}${i.comments}</span>` : ''}</a>`;
         const load = list('issues', () => '&state=' + st, row, () => `No ${st} issues`, 'rows');
         blk.querySelector('.seg').onclick = (e) => { const b = e.target.closest('button'); if (!b || b.dataset.s === st) return; st = b.dataset.s; blk.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', x === b)); load(true); };
         load(true);
@@ -311,14 +362,14 @@
       }
     } else route(true);
     syncRef();
-    $('commits').innerHTML = d.commits.map((c) => `<a class="item" href="${esc(c.url)}" target="_blank" rel="noopener"><div><div class="t">${esc(c.message)}</div><div class="s">${esc(c.author)}</div></div><div class="r">${ago(c.date)}</div></a>`).join('') || '<div class="empty">No commits</div>';
+    $('commits').innerHTML = d.commits.map((c) => `<a class="item" href="${base}/commit/${esc(c.url.split('/').pop())}"><div><div class="t">${esc(c.message)}</div><div class="s">${esc(c.author)}</div></div><div class="r">${ago(c.date)}</div></a>`).join('') || '<div class="empty">No commits</div>';
     $('foot').textContent = `Created ${new Date(d.createdAt).toLocaleDateString()} · ${d.defaultBranch}`;
     $('app').hidden = false;
   } catch (e) { console.error("repo", e && e.stack || e); $("err").hidden = false; }
   document.body.classList.remove('loading');
 })();
 </script>
-<script src="/router.js?v=20261115i"></script>
-<script src="/fx.js?v=20261115i"></script>
+<script src="/router.js?v=20261115j"></script>
+<script src="/fx.js?v=20261115j"></script>
 </body>
 </html>

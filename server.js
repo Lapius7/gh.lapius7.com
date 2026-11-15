@@ -375,6 +375,65 @@ const getFile = (owner, name, ref, p) => cached(`file:${owner}/${name}@${ref}:${
   return { size: j.size, text: buf.toString('utf8') };
 });
 
+// ---- in-site issue / pull request / commit pages ----
+const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const THREAD_WORDS = { pull: 1, pulls: 1, issue: 1, issues: 1 };
+// GitHub's rendered comment HTML: strip scripts/handlers, keep same-repo links inside this site, open others in a new tab
+function fixThread(h, owner, name, base) {
+  const me = new RegExp(`^https://github\\.com/${reEsc(owner)}/${reEsc(name)}/(pull|issues|commit)/([0-9a-f]+)`, 'i');
+  const abs = (u) => (u.startsWith('/') && !u.startsWith('//') ? 'https://github.com' + u : u);
+  return (h || '').replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son\w+\s*=\s*("[^"]*"|'[^']*')/gi, '').replace(/javascript:/gi, '')
+    .replace(/<a ([^>]*?)href="([^"]*)"/g, (m, a, u) => {
+      const x = me.exec(abs(u));
+      if (x) return `<a ${a}href="${base}/${x[1].toLowerCase() === 'commit' ? 'commit' : x[1].toLowerCase() === 'issues' ? 'issues' : 'pull'}/${x[2]}"`;
+      return `<a ${a}target="_blank" rel="noopener" href="${abs(u)}"`;
+    })
+    .replace(/<img ([^>]*?)src="([^"]*)"/g, (m, a, u) => `<img ${a}loading="lazy" src="${abs(u)}"`)
+    .replace(/<a[^>]*class="anchor"[^>]*>[\s\S]*?<\/a>/g, '');
+}
+const ghUser = (u) => ({ login: (u && u.login) || 'ghost', avatar: (u && u.avatar_url) || '', url: (u && u.html_url) || '' });
+const siteBase = (owner, name) => (owner.toLowerCase() === GH_USER.toLowerCase() ? `/repos/${name}` : `/repos/${owner}/${name}`);
+const mapFiles = (l) => (l || []).map((f) => ({ name: f.filename, prev: f.previous_filename || '', status: f.status, add: f.additions || 0, del: f.deletions || 0, patch: f.patch || '', blob: f.blob_url || '' }));
+const getThread = (owner, name, n) => cached(`thread:${owner}/${name}#${n}`.toLowerCase(), 2 * 60 * 1000, async () => {
+  const b = `/repos/${owner}/${name}`, H = 'application/vnd.github.html+json', base = siteBase(owner, name);
+  const fx = (h) => fixThread(h, owner, name, base);
+  const i = await rest(`${b}/issues/${n}`, H);
+  const isPr = !!i.pull_request;
+  const [cm, pr, reviews, rcs] = await Promise.all([
+    rest(`${b}/issues/${n}/comments?per_page=100`, H),
+    isPr ? rest(`${b}/pulls/${n}`) : null,
+    isPr ? rest(`${b}/pulls/${n}/reviews?per_page=100`, H).catch(() => []) : [],
+    isPr ? rest(`${b}/pulls/${n}/comments?per_page=100`, H).catch(() => []) : [],
+  ]);
+  const timeline = [
+    ...cm.map((c) => ({ k: 'c', id: c.id, user: ghUser(c.user), at: c.created_at, assoc: c.author_association, body: fx(c.body_html) })),
+    ...reviews.filter((r) => r.state !== 'PENDING').map((r) => ({
+      k: 'r', id: r.id, user: ghUser(r.user), at: r.submitted_at, state: r.state, assoc: r.author_association, body: fx(r.body_html),
+      inline: rcs.filter((c) => c.pull_request_review_id === r.id).map((c) => ({ path: c.path, line: c.line || c.original_line || 0, user: ghUser(c.user), body: fx(c.body_html) })),
+    })).filter((r) => r.body || r.inline.length || r.state !== 'COMMENTED'),
+  ].sort((a, b2) => new Date(a.at) - new Date(b2.at));
+  return {
+    n: i.number, kind: isPr ? 'pull' : 'issue', title: i.title, state: i.state, reason: i.state_reason || '', merged: !!(pr && pr.merged), draft: !!(pr && pr.draft), locked: !!i.locked,
+    author: ghUser(i.user), assoc: i.author_association, at: i.created_at, closedAt: i.closed_at, mergedAt: (pr && pr.merged_at) || null, mergedBy: pr && pr.merged_by ? ghUser(pr.merged_by) : null,
+    labels: (i.labels || []).filter((x) => typeof x === 'object').map((x) => ({ name: x.name, color: /^[0-9a-fA-F]{6}$/.test(x.color || '') ? x.color : '888888' })),
+    assignees: (i.assignees || []).map(ghUser), milestone: (i.milestone && i.milestone.title) || '', body: fx(i.body_html), commentsCount: i.comments, commentsCut: i.comments > 100, url: i.html_url, timeline,
+    info: pr ? { base: pr.base.ref, head: pr.head.ref, headRepo: (pr.head.repo && pr.head.repo.full_name) || '', additions: pr.additions, deletions: pr.deletions, files: pr.changed_files, commits: pr.commits, mergeable: pr.mergeable_state || '' } : null,
+  };
+});
+const getThreadPart = (owner, name, n, part) => cached(`threadp:${part}:${owner}/${name}#${n}`.toLowerCase(), 2 * 60 * 1000, async () => {
+  const b = `/repos/${owner}/${name}/pulls/${n}`;
+  if (part === 'files') return { files: mapFiles(await rest(`${b}/files?per_page=100`)) };
+  const l = await rest(`${b}/commits?per_page=100`);
+  return { commits: l.map((c) => ({ sha: c.sha, msg: (c.commit.message || '').split('\n')[0], author: (c.author && c.author.login) || (c.commit.author && c.commit.author.name) || '', avatar: (c.author && c.author.avatar_url) || '', at: c.commit.author && c.commit.author.date })) };
+});
+const getCommit = (owner, name, sha) => cached(`commit:${owner}/${name}@${sha}`.toLowerCase(), 30 * 60 * 1000, async () => {
+  const c = await rest(`/repos/${owner}/${name}/commits/${sha}`);
+  return {
+    sha: c.sha, msg: c.commit.message || '', at: c.commit.author && c.commit.author.date, author: ghUser(c.author), authorName: (c.commit.author && c.commit.author.name) || '',
+    parents: (c.parents || []).map((p) => p.sha), add: (c.stats && c.stats.additions) || 0, del: (c.stats && c.stats.deletions) || 0, url: c.html_url, files: mapFiles(c.files), filesCut: (c.files || []).length >= 300,
+  };
+});
+
 const LANG_COLORS = { JavaScript: '#f1e05a', TypeScript: '#3178c6', Python: '#3572A5', HTML: '#e34c26', CSS: '#563d7c', Shell: '#89e051', Go: '#00ADD8', Rust: '#dea584', Java: '#b07219', Vue: '#41b883', SCSS: '#c6538c', Dockerfile: '#384d54', 'C#': '#178600', C: '#555555', 'C++': '#f34b7d', Kotlin: '#A97BFF', Swift: '#F05138', PHP: '#4F5D95', Lua: '#000080', PowerShell: '#012456' };
 const getRepoPage = (owner, name) => cached(`repopage2:${owner}/${name}`.toLowerCase(), 10 * 60 * 1000, async () => {
   const base = `/repos/${owner}/${name}`;
@@ -464,6 +523,26 @@ http.createServer(async (req, res) => {
       return res.end(JSON.stringify(await getRepoExtra(owner, name, kind, st, page)));
     } catch (e) { res.writeHead(404); return res.end(); }
   }
+  if (url.pathname === '/api/repo-thread' || url.pathname === '/api/repo-commit') {
+    try {
+      const [owner, name] = (url.searchParams.get('name') || '').split('/');
+      const okOwner = owner && (owner.toLowerCase() === GH_USER.toLowerCase() || (await getOrgNames()).some((n) => n.login.toLowerCase() === owner.toLowerCase()));
+      if (!okOwner || !/^[A-Za-z0-9._-]+$/.test(name || '')) { res.writeHead(400); return res.end(); }
+      await getRepoPage(owner, name);
+      let out;
+      if (url.pathname === '/api/repo-commit') {
+        const sha = url.searchParams.get('sha') || '';
+        if (!/^[0-9a-f]{7,40}$/i.test(sha)) { res.writeHead(400); return res.end(); }
+        out = await getCommit(owner, name, sha);
+      } else {
+        const n = url.searchParams.get('n') || '', part = url.searchParams.get('part') || 'main';
+        if (!/^\d{1,7}$/.test(n) || !['main', 'files', 'commits'].includes(part)) { res.writeHead(400); return res.end(); }
+        out = part === 'main' ? await getThread(owner, name, n) : await getThreadPart(owner, name, n, part);
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60' });
+      return res.end(JSON.stringify(out));
+    } catch (e) { res.writeHead(404); return res.end(); }
+  }
   if (url.pathname === '/api/repo-tree') {
     try {
       const [owner, name] = (url.searchParams.get('name') || '').split('/'), ref = url.searchParams.get('ref') || '';
@@ -498,7 +577,15 @@ http.createServer(async (req, res) => {
       const d0 = await getRepoPage(owner, name);
       let sub = '', fpath = '';
       const joined = rest.join('/'), refs = [...d0.branches, ...d0.tags].filter((b) => joined === b || joined.startsWith(b + '/')).sort((a, b) => b.length - a.length);
-      if (rest.length === 1 && REPO_SUBS[rest[0].toLowerCase()] && !refs.length) sub = REPO_SUBS[rest[0].toLowerCase()];
+      const w0 = (rest[0] || '').toLowerCase();
+      let ttl = '';
+      if (!refs.length && THREAD_WORDS[w0] && /^\d{1,7}$/.test(rest[1] || '') && (rest.length === 2 || (rest.length === 3 && ['files', 'commits'].includes(rest[2].toLowerCase())))) {
+        sub = 'thread';
+        if (url.pathname !== '/api/repo') try { const th = await getThread(d0.owner, d0.name, rest[1]); ttl = `${th.title} (#${th.n})`; } catch { ttl = `#${rest[1]}`; }
+      } else if (!refs.length && (w0 === 'commit' || w0 === 'commits') && rest.length === 2 && /^[0-9a-f]{7,40}$/i.test(rest[1])) {
+        sub = 'commit';
+        if (url.pathname !== '/api/repo') try { const cm = await getCommit(d0.owner, d0.name, rest[1]); ttl = `${cm.msg.split('\n')[0]} (${cm.sha.slice(0, 7)})`; } catch { ttl = rest[1].slice(0, 7); }
+      } else if (rest.length === 1 && REPO_SUBS[rest[0].toLowerCase()] && !refs.length) sub = REPO_SUBS[rest[0].toLowerCase()];
       else fpath = refs.length ? joined.slice(refs[0].length + 1) : rest.slice(1).join('/');
       const base = owner.toLowerCase() === GH_USER.toLowerCase() ? `/repos/${d0.name}` : `/repos/${d0.owner}/${d0.name}`;
       const d = { ...d0, base };
@@ -508,8 +595,8 @@ http.createServer(async (req, res) => {
       }
       const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
       const html = fs.readFileSync(path.join(PUBLIC, 'repo.html'), 'utf8')
-        .replace(/__TITLE__/g, esc(`${d.owner}/${d.name}${sub ? ' · ' + ({ issues: 'Issues', stars: 'Stargazers', forks: 'Forks', license: 'License' })[sub] : fpath ? ' · ' + fpath : ''}`)).replace(/__SUB__/g, sub).replace(/__DESC__/g, esc(d.description || `${d.owner}/${d.name} on GitHub`))
-        .replace(/__URL__/g, esc(`https://gh.lapius7.com${base}${sub ? '/' + sub : rest.length ? '/' + rest.map(encodeURIComponent).join('/') : ''}`)).replace(/__IMG__/g, esc(`https://opengraph.githubassets.com/1/${d.owner}/${d.name}`));
+        .replace(/__TITLE__/g, esc(`${d.owner}/${d.name}${ttl ? ' · ' + ttl : sub ? ' · ' + ({ issues: 'Issues', stars: 'Stargazers', forks: 'Forks', license: 'License' })[sub] : fpath ? ' · ' + fpath : ''}`)).replace(/__SUB__/g, sub).replace(/__DESC__/g, esc(d.description || `${d.owner}/${d.name} on GitHub`))
+        .replace(/__URL__/g, esc(`https://gh.lapius7.com${base}${sub && !ttl ? '/' + sub : rest.length ? '/' + rest.map(encodeURIComponent).join('/') : ''}`)).replace(/__IMG__/g, esc(`https://opengraph.githubassets.com/1/${d.owner}/${d.name}`));
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
       return res.end(html);
     } catch (e) { console.error(e.message); res.writeHead(404); return res.end(); }
