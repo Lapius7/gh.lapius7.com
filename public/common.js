@@ -66,7 +66,7 @@ const banner = (() => {
       ctx.fillStyle = gg; ctx.fillRect(0, 0, w, h);
       // Cloud density per cell: slow drift, a fine wisp layer on top.
       for (let r = 0; r < rows; r++) for (let q = 0; q < cols; q++) {
-        const n = fbm(q * 0.04 - t * 0.02, r * 0.085 + 3), wisp = fbm(q * 0.09 - t * 0.7 * 0.09, r * 0.26 + 11);
+        const n = fbm(q * 0.04 - t * 0.08, r * 0.085 + 3), wisp = fbm(q * 0.09 - t * 2.6 * 0.09, r * 0.26 + 11);
         dens[r * cols + q] = clamp(smooth(0.4, 0.7, n) * (0.7 + 0.6 * wisp));
       }
       for (let r = 0; r < rows; r++) {
