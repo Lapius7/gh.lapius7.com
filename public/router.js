@@ -5,6 +5,7 @@
   const kindOf = (p) => {
     if (p === '/' || new RegExp('^/' + PANE + '/?$').test(p)) return 'index';
     if (/^\/repos\/[^/]+/.test(p)) return 'repo';
+    if (/^\/(followers|following|stars|gists)\/?$/.test(p)) return 'list';
     if (new RegExp('^/[A-Za-z0-9-]+(?:/' + PANE + ')?/?$').test(p)) return 'org';
     return '';
   };

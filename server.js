@@ -498,6 +498,10 @@ const ago = (iso) => { const d = (Date.now() - new Date(iso)) / 86400000; return
 const fmtSize = (b) => (b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`);
 async function cardFor(p) {
   const m = p.match(/^\/repos\/(.+)$/);
+  if (!m && /^\/(followers|following|stars|gists)$/.test(p)) {
+    const u = (await getStats('week')).user, kind = p.slice(1);
+    return { top: u.login, title: LIST_KINDS[kind], desc: u.bio, stats: [[fmtC(u.followers), 'FOLLOWERS'], [fmtC(u.following), 'FOLLOWING'], [fmtC(u.stars), 'STARS'], [fmtC(u.gists), 'GISTS']], meta: [] };
+  }
   if (!m) {
     const org = p.match(/^\/([A-Za-z0-9-]+)$/);
     if (!org || org[1].toLowerCase() === GH_USER.toLowerCase() || !(await getOrgNames()).some((n) => n.login.toLowerCase() === org[1].toLowerCase())) return null;
@@ -554,6 +558,28 @@ async function cardFor(p) {
   }
   return { top: d0.owner, title: d0.name, desc: d0.description, stats: repoStats, meta: repoMeta };
 }
+// ---- profile lists: /followers /following /stars /gists ----
+const LIST_KINDS = { followers: 'Followers', following: 'Following', stars: 'Stars', gists: 'Gists' };
+const LIST_PER = 30;
+const getList = (kind, after) => cached(`list2:${kind}:${after || ''}`, TTL, async () => {
+  const U = 'login name avatarUrl bio url';
+  const q = {
+    followers: `followers(first:${LIST_PER}, after:$a){ totalCount pageInfo{ hasNextPage endCursor } nodes{ ${U} } }`,
+    following: `following(first:${LIST_PER}, after:$a){ totalCount pageInfo{ hasNextPage endCursor } nodes{ ${U} } }`,
+    stars: `repositories(first:${LIST_PER}, after:$a, ownerAffiliations:OWNER, privacy:PUBLIC, isFork:false, orderBy:{field:STARGAZERS, direction:DESC}){ totalCount pageInfo{ hasNextPage endCursor } nodes{ name description stargazerCount forkCount pushedAt primaryLanguage{ name color } } }`,
+    gists: `gists(first:${LIST_PER}, after:$a, privacy:PUBLIC, orderBy:{field:PUSHED_AT, direction:DESC}){ totalCount pageInfo{ hasNextPage endCursor } nodes{ name description url pushedAt stargazerCount files(limit:3){ name } } }`,
+  }[kind];
+  const d = await gql(`query($l:String!,$a:String){ user(login:$l){ ${q} } }`, { l: GH_USER, a: after || null });
+  const c = d.user[kind === 'stars' ? 'repositories' : kind];
+  const items = c.nodes.map((n) => kind === 'stars'
+    ? { name: n.name, description: n.description || '', stars: n.stargazerCount, forks: n.forkCount, at: n.pushedAt, lang: n.primaryLanguage }
+    : kind === 'gists'
+      ? { id: n.name, description: n.description || '', url: n.url, stars: n.stargazerCount, at: n.pushedAt, files: n.files.map((f) => f.name) }
+      : { login: n.login, name: n.name || '', bio: n.bio || '', avatar: n.avatarUrl, url: n.url });
+  // Stars lists only repositories that have stars (sorted by stars, so the first zero ends the list)
+  const kept = kind === 'stars' ? items.filter((x) => x.stars > 0) : items, more = c.pageInfo.hasNextPage && kept.length === items.length;
+  return { kind, total: kind === 'stars' ? undefined : c.totalCount, items: kept, next: more ? c.pageInfo.endCursor : '' };
+});
 let ogCache = null;
 const escHtml = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // Put the final tab title into the served HTML so it never changes after the page loads.
@@ -695,6 +721,21 @@ http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
       return res.end(html);
     } catch (e) { console.error(e.message); res.writeHead(404); return res.end(); }
+  }
+  if (url.pathname === '/api/people') {
+    const kind = url.searchParams.get('kind'), after = url.searchParams.get('after') || '';
+    if (!LIST_KINDS[kind] || !/^[A-Za-z0-9=_-]{0,80}$/.test(after)) { res.writeHead(400); return res.end(); }
+    try {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, stale-while-revalidate=600' });
+      return res.end(JSON.stringify(await getList(kind, after)));
+    } catch (e) { console.error(e.message); res.writeHead(502, { 'Content-Type': 'application/json' }); return res.end('{"error":"upstream_error"}'); }
+  }
+  const lk = url.pathname.match(/^\/(followers|following|stars|gists)\/?$/);
+  if (lk) {
+    return fs.readFile(path.join(PUBLIC, 'list.html'), (err, buf) => {
+      res.writeHead(err ? 500 : 200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+      res.end(err ? undefined : withTitle(buf.toString(), LIST_KINDS[lk[1]]).replace(/__KIND__/g, lk[1]).replace(/__OGIMG__/g, escHtml(`https://gh.lapius7.com/og/${lk[1]}.png?v=${OG_V}`)).replace(/__OGNAME__/g, escHtml(LIST_KINDS[lk[1]])));
+    });
   }
   const seg = url.pathname.match(/^\/([A-Za-z0-9-]+)(?:\/(?:overview|work|activity|repos))?\/?$/);
   if (seg && !fs.existsSync(path.join(PUBLIC, seg[1]))) {

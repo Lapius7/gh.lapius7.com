@@ -16,7 +16,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://gh.lapius7.com/og.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232ecc8f'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/style.css?v=20261115l">
+<link rel="stylesheet" href="/style.css?v=20261115m">
 </head>
 <body class="loading">
 <div class="banner"><canvas id="bn"></canvas></div>
@@ -220,7 +220,7 @@ function render(s){
   $('avatar').src = s.user.avatar;
   $('name').textContent = s.user.name || s.user.login;
   $('link').href = s.user.url; $('link').textContent = '@' + s.user.login;
-  $('meta').innerHTML = `<span><b>${s.user.followers}</b> followers</span><span><b>${s.user.following}</b> following</span><span><b>${s.user.stars}</b> stars</span><span><b>${s.user.gists}</b> gists</span>`;
+  $('meta').innerHTML = [['followers', s.user.followers], ['following', s.user.following], ['stars', s.user.stars], ['gists', s.user.gists]].map(([k, v]) => `<a href="/${k}"><b>${v}</b> ${k}</a>`).join('');
   $('crumbs').innerHTML = [{ login: s.user.login, avatarUrl: s.user.avatar, href: '/', org: false, on: true }, ...s.user.orgs.map(n => ({ ...n, href: '/' + n.login, org: true }))]
     .map(n => `<a class="ic ${n.org ? 'org' : ''} ${n.on ? 'on' : ''}" href="${esc(n.href)}" title="${esc(n.login)}" aria-label="${esc(n.login)}"><img src="${esc(n.avatarUrl)}" alt=""></a>`).join('');
   document.title = `${s.user.name || s.user.login} · GitHub`;
@@ -308,7 +308,7 @@ $('q').oninput = drawRepos;
 load();
 window.SPA_PAGE = { owns: (p) => /^\/(overview|work|activity|repos)?\/?$/.test(p), nav: (u) => { history.pushState(null, '', u); showPane(paneFromPath()); } };
 </script>
-<script src="/router.js?v=20261115l"></script>
-<script src="/fx.js?v=20261115l"></script>
+<script src="/router.js?v=20261115m"></script>
+<script src="/fx.js?v=20261115m"></script>
 </body>
 </html>
