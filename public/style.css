@@ -196,3 +196,80 @@ section.blk[hidden]{display:none}
 *::-webkit-scrollbar-button,*::-webkit-scrollbar-corner{display:none;background:transparent}
 .code{scrollbar-color:color-mix(in srgb,var(--muted) 45%,transparent) transparent}
 .code::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--muted) 45%,transparent);background-clip:content-box}
+
+/* ---- fx: motion and navigation extras (see fx.js) ---- */
+h1,h2{text-wrap:balance}
+#fxprog{position:fixed;top:0;left:0;right:0;height:2px;z-index:30;pointer-events:none;background:linear-gradient(90deg,var(--l3),var(--l4));transform-origin:0 50%;transform:scaleX(var(--p,0))}
+.banner canvas{will-change:transform}
+
+/* press feedback */
+.years button,.pager button,.tabs button,.av{transition:color .15s,background-color .15s,border-color .15s,transform .15s}
+.btn:active,.years button:active,.pager button:not(:disabled):active,.tabs button:active,.av:active,.crumbs a.ic:active{transform:scale(.96)}
+
+/* image outlines */
+.crumbs a.ic img,.av img,.orgs img{outline:1px solid rgba(255,255,255,.1);outline-offset:-1px}
+:root[data-theme="light"] .crumbs a.ic img,:root[data-theme="light"] .av img,:root[data-theme="light"] .orgs img{outline-color:rgba(0,0,0,.1)}
+
+/* sliding tab underline */
+.tabs{position:relative}
+.tabs.fx-bar button.on{border-color:transparent}
+.tabs .ind{position:absolute;left:0;top:0;height:1px;width:0;background:var(--text);pointer-events:none}
+.tabs.ready .ind{transition:transform .32s cubic-bezier(.2,0,0,1),width .32s cubic-bezier(.2,0,0,1)}
+
+/* pointer spotlight */
+@media (hover:hover){
+  .card,.search{isolation:isolate}
+  .card{position:relative}
+  .card::before,.search::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(200px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--text) 8%,transparent),transparent 70%)}
+  .card:hover::before,.search:hover::before{opacity:1}
+}
+
+/* back to top / jump button */
+.totop,.kbtn{background:var(--panel);color:var(--text);border:1px solid var(--line);font:inherit;cursor:pointer}
+.totop{position:fixed;right:16px;bottom:16px;z-index:5;width:40px;height:40px;border-radius:999px;font-size:16px;line-height:20px;display:grid;place-items:center;padding:0;box-shadow:0 4px 16px rgba(0,0,0,.18);opacity:0;visibility:hidden;transform:translateY(8px);transition:opacity .2s,transform .2s,visibility .2s}
+.totop.show{opacity:.92;visibility:visible;transform:none}
+.totop.show:hover{opacity:1}
+.totop.show:active{transform:scale(.96)}
+.kbtn{position:fixed;top:12px;right:56px;z-index:5;border-radius:6px;padding:4px 10px;font-size:12px;line-height:17px;height:27px;display:inline-flex;align-items:center;gap:8px;opacity:.85;transition:opacity .15s,transform .15s}
+.kbtn:hover{opacity:1}.kbtn:active{transform:scale(.96)}
+kbd{font:11px/16px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:0 5px}
+@media (hover:none){.kbtn kbd{display:none}}
+
+/* command palette */
+#cmdk{position:fixed;inset:0;z-index:50;display:flex;justify-content:center;align-items:flex-start;padding:14vh 12px 0;background:color-mix(in srgb,var(--bg) 55%,transparent);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);opacity:0;visibility:hidden;transition:opacity .15s,visibility 0s .15s}
+#cmdk.open{opacity:1;visibility:visible;transition:opacity .15s,visibility 0s}
+.cm-panel{width:min(560px,100%);background:var(--panel);border-radius:14px;box-shadow:0 0 0 1px var(--line),0 24px 64px rgba(0,0,0,.35);overflow:hidden;transform:translateY(-6px) scale(.98);transition:transform .2s cubic-bezier(.2,0,0,1)}
+#cmdk.open .cm-panel{transform:none}
+.cm-in{display:block;width:100%;background:none;border:0;border-bottom:1px solid var(--line);outline:0;color:var(--text);font:inherit;font-size:15px;line-height:24px;padding:14px 16px}
+.cm-in::placeholder{color:var(--muted)}
+.cm-list{max-height:min(50vh,360px);overflow-y:auto;overscroll-behavior:contain;padding:6px}
+.cm-g{color:var(--muted);font-size:11px;padding:8px 8px 4px}
+.cm-i{display:flex;justify-content:space-between;align-items:center;gap:16px;min-height:36px;padding:0 8px;border-radius:8px;cursor:pointer;font-size:13px}
+.cm-i[aria-selected="true"]{background:var(--line)}
+.cm-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-h{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:50%}
+.cm-e{color:var(--muted);font-size:13px;padding:24px 8px;text-align:center}
+.cm-foot{display:flex;gap:16px;padding:8px 14px;border-top:1px solid var(--line);color:var(--muted);font-size:11px}
+.cm-foot kbd{margin-right:3px}
+
+/* motion (skipped entirely for prefers-reduced-motion: fx.js leaves .fx off) */
+@keyframes rvIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes grow{from{transform:scaleY(0)}to{transform:none}}
+@keyframes wipe{from{clip-path:inset(0 100% 0 0 round 5px)}to{clip-path:inset(0 0 0 0 round 5px)}}
+@keyframes paneIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.fx .rv{opacity:0}
+.fx .rv.in{animation:rvIn .5s cubic-bezier(.2,0,0,1) var(--rd,0ms) both}
+.fx .bars i{transform-origin:50% 100%}
+.fx .bars:not(.go) i{transform:scaleY(0)}
+.fx .bars.go i{animation:grow .6s cubic-bezier(.2,0,0,1) calc(var(--i,0)*35ms) both}
+.fx .stack:not(.go){clip-path:inset(0 100% 0 0 round 5px)}
+.fx .stack.go{animation:wipe .8s cubic-bezier(.2,0,0,1) both}
+.fx-nav .pane:not([hidden]){animation:paneIn .3s cubic-bezier(.2,0,0,1) both}
+@media (prefers-reduced-motion:reduce){.totop,.kbtn,#cmdk,.cm-panel,.tabs .ind{transition:none}}
+
+/* pixel-align: integer line-heights and fixed heights so glyphs sit on the pixel grid */
+.theme,.kbtn{box-sizing:border-box;height:28px;padding-top:0;padding-bottom:0;line-height:20px;display:inline-flex;align-items:center;justify-content:center}
+.tabs button{line-height:20px}
+.kbtn kbd{display:inline-flex;align-items:center;height:18px;line-height:1}
+.theme{font-size:0;width:34px;padding:0}
+.theme::before{content:"";width:14px;height:14px;box-sizing:border-box;border-radius:50%;border:1.5px solid currentColor;background:linear-gradient(90deg,transparent 50%,currentColor 50%)}
