@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GitHub</title>
+<title>Organization · GitHub</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232ecc8f'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/style.css?v=20261019a">
 <style>
@@ -97,7 +97,7 @@ function render(s){
   $('avatar').src = o.avatar;
   $('name').textContent = o.name || o.login;
   $('link').href = o.url; $('link').textContent = '@' + o.login + (o.description ? ' · ' + o.description : '');
-  document.title = `${o.login} · GitHub`;
+  document.title = `${o.name || o.login} · GitHub`;
   $('meta').innerHTML = [o.location, o.website && `<a href="${esc(o.website)}" target="_blank" rel="noopener">${esc(o.website.replace(/^https?:\/\//,''))}</a>`].filter(Boolean).map(x => `<span>${x.startsWith('<') ? x : esc(x)}</span>`).join('');
   $('crumbs').innerHTML = [{ login: s.me.login, avatarUrl: s.me.avatarUrl, href: '/', org: false }, ...s.orgNames.map(n => ({ ...n, href: '/' + n.login, org: true }))]
     .map(n => `<a class="ic ${n.org ? 'org' : ''} ${n.login.toLowerCase() === o.login.toLowerCase() ? 'on' : ''}" href="${esc(n.href)}" title="${esc(n.login)}" aria-label="${esc(n.login)}"><img src="${esc(n.avatarUrl)}" alt=""></a>`).join('');

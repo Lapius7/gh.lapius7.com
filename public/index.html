@@ -223,6 +223,7 @@ function render(s){
   $('meta').innerHTML = `<span><b>${s.user.followers}</b> followers</span><span><b>${s.user.following}</b> following</span><span><b>${s.user.stars}</b> stars</span><span><b>${s.user.gists}</b> gists</span>`;
   $('crumbs').innerHTML = [{ login: s.user.login, avatarUrl: s.user.avatar, href: '/', org: false, on: true }, ...s.user.orgs.map(n => ({ ...n, href: '/' + n.login, org: true }))]
     .map(n => `<a class="ic ${n.org ? 'org' : ''} ${n.on ? 'on' : ''}" href="${esc(n.href)}" title="${esc(n.login)}" aria-label="${esc(n.login)}"><img src="${esc(n.avatarUrl)}" alt=""></a>`).join('');
+  document.title = `${s.user.name || s.user.login} · GitHub`;
 
   const names = [...new Set([...Object.keys(s.cur.byRepo), ...Object.keys(s.prev.byRepo)])].sort();
   const sel = $('repo'), keep = sel.value;
