@@ -490,8 +490,8 @@ http.createServer(async (req, res) => {
     try {
       const isOwner = async (l) => l.toLowerCase() === GH_USER.toLowerCase() || (await getOrgNames()).some((n) => n.login.toLowerCase() === l.toLowerCase());
       const parts = (url.pathname === '/api/repo' ? (url.searchParams.get('name') || '') : url.pathname.replace(/^\/repos\//, '')).split('/').filter(Boolean).map((x) => { try { return decodeURIComponent(x); } catch { return x; } });
-      // /repos/<name>[/<ref>/<path…>|/<sub>] for the main user, /repos/<owner>/<name>[…] for orgs
-      const ownerForm = parts.length >= 2 && (await isOwner(parts[0])) && /^[A-Za-z0-9._-]+$/.test(parts[1]);
+      // /repos/<name>[/<ref>/<path…>|/<sub>] for the main user, /repos/<owner>/<name>[…] for orgs (the main user's login is never an owner segment: a repo may share its name)
+      const ownerForm = parts.length >= 2 && parts[0].toLowerCase() !== GH_USER.toLowerCase() && (await isOwner(parts[0])) && /^[A-Za-z0-9._-]+$/.test(parts[1]);
       const [owner, name] = ownerForm ? [parts[0], parts[1]] : [GH_USER, parts[0]];
       const rest = parts.slice(ownerForm ? 2 : 1);
       if (!(await isOwner(owner)) || !/^[A-Za-z0-9._-]+$/.test(name || '')) { res.writeHead(404); return res.end(); }
