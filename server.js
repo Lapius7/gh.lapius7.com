@@ -488,6 +488,7 @@ async function resolveRepo(pathStr, wantTitle) {
   return { d0, owner, rest, sub, fpath, ttl, ref, thread, commit, base };
 }
 // ---- per-page OGP cards: /og/<site path>.png ----
+const OG_V = Date.now().toString(36); // changes on every restart/deploy so link-preview caches refetch the image
 const cardCache = new Map(); // pathname -> { t, v }
 let cardRenders = [];       // timestamps of recent renders, to cap CPU (each render is ~200ms)
 const fmtN = (n) => Number(n || 0).toLocaleString('en-US');
@@ -669,7 +670,7 @@ http.createServer(async (req, res) => {
       const pagePath = `${base}${sub && !ttl ? '/' + sub : rest.length ? '/' + rest.map(encodeURIComponent).join('/') : ''}`;
       const html = fs.readFileSync(path.join(PUBLIC, 'repo.html'), 'utf8')
         .replace(/__TITLE__/g, esc(`${d.owner}/${d.name}${ttl ? ' · ' + ttl : sub ? ' · ' + ({ issues: 'Issues', stars: 'Stargazers', forks: 'Forks', license: 'License' })[sub] : fpath ? ' · ' + fpath : ''}`)).replace(/__SUB__/g, sub).replace(/__DESC__/g, esc(d.description || `${d.owner}/${d.name} on GitHub`))
-        .replace(/__URL__/g, esc(`https://gh.lapius7.com${pagePath}`)).replace(/__IMG__/g, esc(`https://gh.lapius7.com/og${pagePath}.png`));
+        .replace(/__URL__/g, esc(`https://gh.lapius7.com${pagePath}`)).replace(/__IMG__/g, esc(`https://gh.lapius7.com/og${pagePath}.png?v=${OG_V}`));
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
       return res.end(html);
     } catch (e) { console.error(e.message); res.writeHead(404); return res.end(); }
@@ -680,7 +681,7 @@ http.createServer(async (req, res) => {
       if ((await getOrgNames()).some((n) => n.login.toLowerCase() === seg[1].toLowerCase())) {
         let name = seg[1];
         try { const o = (await getOrg(seg[1])).org; name = o.name || o.login; } catch (e) { console.error(e.message); }
-        return fs.readFile(path.join(PUBLIC, 'org.html'), (err, buf) => { res.writeHead(err ? 500 : 200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' }); res.end(err ? undefined : withTitle(buf.toString(), name).replace(/__OGIMG__/g, escHtml(`https://gh.lapius7.com/og/${seg[1]}.png`)).replace(/__OGNAME__/g, escHtml(name))); });
+        return fs.readFile(path.join(PUBLIC, 'org.html'), (err, buf) => { res.writeHead(err ? 500 : 200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' }); res.end(err ? undefined : withTitle(buf.toString(), name).replace(/__OGIMG__/g, escHtml(`https://gh.lapius7.com/og/${seg[1]}.png?v=${OG_V}`)).replace(/__OGNAME__/g, escHtml(name))); });
       }
     } catch (e) { console.error(e.message); }
   }
