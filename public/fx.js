@@ -38,7 +38,7 @@
 
   // ---- tab bars: a single underline that slides between tabs; panes fade in on switch ----
   const placeInd = (bar) => {
-    const on = $('button.on', bar), ind = bar._ind;
+    const on = $('button.on,a.on', bar), ind = bar._ind;
     if (!on || !on.offsetWidth) return;
     ind.style.width = on.offsetWidth + 'px';
     ind.style.transform = `translate(${on.offsetLeft}px,${on.offsetTop + on.offsetHeight - 1}px)`;
@@ -136,6 +136,7 @@
     if (gh && gh.href && !gh.href.endsWith('#')) out.push({ g: 'Links', t: 'Open on GitHub', h: gh.textContent.trim(), run: () => window.open(gh.href, '_blank', 'noopener') });
     out.push({ g: 'Actions', t: 'Toggle theme', h: 'Light / dark', run: () => { const b = $('#theme'); b && b.click(); } });
     out.push({ g: 'Actions', t: 'Scroll to top', h: '', run: () => top.click() });
+    $$('#rtabs a').forEach((a) => out.push({ g: 'Pages', t: a.firstChild.textContent.trim(), h: 'This repository', run: () => a.click() }));
     $$('#years button').forEach((b) => out.push({ g: 'Heatmap', t: 'Show ' + b.textContent.trim(), h: 'Contributions', run: () => b.click() }));
     $$('#repos a.repo').forEach((a) => {
       const n = $('.rn', a); if (n) out.push({ g: 'Repositories', t: n.textContent.trim(), h: ($('.rd', a) || {}).textContent || '', run: () => a.click() });

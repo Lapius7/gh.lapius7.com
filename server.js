@@ -118,9 +118,9 @@ async function gql1(query, variables) {
   return j.data;
 }
 
-const rest = async (p) => {
+const rest = async (p, accept = 'application/vnd.github+json') => {
   const r = await fetch('https://api.github.com' + p, {
-    headers: { Authorization: `bearer ${GH_TOKEN}`, Accept: 'application/vnd.github+json', 'User-Agent': 'gh.lapius7.com' },
+    headers: { Authorization: `bearer ${GH_TOKEN}`, Accept: accept, 'User-Agent': 'gh.lapius7.com' },
   });
   if (!r.ok) throw new Error(`${r.status} ${p}`);
   return r.json();
@@ -342,6 +342,26 @@ function fixReadme(h, owner, name, br) {
     .replace(/<img ([^>]*?)src="([^"]*)"/g, (m, a, u) => `<img ${a}loading="lazy" src="${abs(u, raw)}"`)
     .replace(/<a[^>]*class="anchor"[^>]*>[\s\S]*?<\/a>/g, '');
 }
+const REPO_SUBS = { issue: 'issues', issues: 'issues', star: 'stars', stars: 'stars', stargazers: 'stars', fork: 'forks', forks: 'forks', license: 'license', licence: 'license' };
+const PER = 30;
+const getRepoExtra = (owner, name, kind, state, page) => cached(`extra:${kind}:${owner}/${name}:${state}:${page}`.toLowerCase(), 5 * 60 * 1000, async () => {
+  const base = `/repos/${owner}/${name}`;
+  if (kind === 'issues') {
+    const l = await rest(`${base}/issues?state=${state}&per_page=${PER}&page=${page}&sort=created&direction=desc`);
+    return { more: l.length === PER, items: l.map((i) => ({ n: i.number, title: i.title, state: i.state, pr: !!i.pull_request, merged: !!(i.pull_request && i.pull_request.merged_at), author: i.user?.login || '', avatar: i.user?.avatar_url || '', comments: i.comments, at: i.created_at, closedAt: i.closed_at, url: i.html_url, labels: (i.labels || []).filter((x) => typeof x === 'object').map((x) => ({ name: x.name, color: /^[0-9a-fA-F]{6}$/.test(x.color || '') ? x.color : '888888' })) })) };
+  }
+  if (kind === 'stars') {
+    const l = await rest(`${base}/stargazers?per_page=${PER * 2}&page=${page}`, 'application/vnd.github.star+json');
+    return { more: l.length === PER * 2, items: l.map((x) => ({ login: x.user.login, avatar: x.user.avatar_url, url: x.user.html_url, at: x.starred_at })) };
+  }
+  if (kind === 'forks') {
+    const l = await rest(`${base}/forks?per_page=${PER}&page=${page}&sort=newest`);
+    return { more: l.length === PER, items: l.map((f) => ({ full: f.full_name, owner: f.owner.login, avatar: f.owner.avatar_url, url: f.html_url, stars: f.stargazers_count, description: f.description || '', at: f.pushed_at })) };
+  }
+  const j = await rest(`${base}/license`);
+  const meta = j.license?.key ? await rest(`/licenses/${encodeURIComponent(j.license.key)}`).catch(() => ({})) : {};
+  return { name: j.license?.name || j.name, spdx: j.license?.spdx_id && j.license.spdx_id !== 'NOASSERTION' ? j.license.spdx_id : '', file: j.name, url: j.html_url, size: j.size, description: meta.description || '', permissions: meta.permissions || [], conditions: meta.conditions || [], limitations: meta.limitations || [], body: Buffer.from(j.content || '', 'base64').toString('utf8') };
+});
 const getFile = (owner, name, ref, p) => cached(`file:${owner}/${name}@${ref}:${p}`.toLowerCase(), 30 * 60 * 1000, async () => {
   const j = await rest(`/repos/${owner}/${name}/contents/${p.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(ref)}`);
   if (Array.isArray(j) || j.type !== 'file') throw new Error('not file');
@@ -425,6 +445,18 @@ http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ ...(await getOrg(login)), orgNames: await getOrgNames(), me: orgList.me }));
     } catch (e) { console.error(e.message); res.writeHead(502, { 'Content-Type': 'application/json' }); return res.end('{"error":"upstream_error"}'); }
   }
+  if (url.pathname === '/api/repo-extra') {
+    try {
+      const [owner, name] = (url.searchParams.get('name') || '').split('/');
+      const kind = url.searchParams.get('kind') || '', st = url.searchParams.get('state') || 'open';
+      const page = Math.min(50, Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1));
+      const okOwner = owner && (owner.toLowerCase() === GH_USER.toLowerCase() || (await getOrgNames()).some((n) => n.login.toLowerCase() === owner.toLowerCase()));
+      if (!okOwner || !/^[A-Za-z0-9._-]+$/.test(name || '') || !['issues', 'stars', 'forks', 'license'].includes(kind) || !['open', 'closed', 'all'].includes(st)) { res.writeHead(400); return res.end(); }
+      await getRepoPage(owner, name);
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=120' });
+      return res.end(JSON.stringify(await getRepoExtra(owner, name, kind, st, page)));
+    } catch (e) { res.writeHead(404); return res.end(); }
+  }
   if (url.pathname === '/api/repo-file') {
     try {
       const [owner, name] = (url.searchParams.get('name') || '').split('/');
@@ -436,21 +468,27 @@ http.createServer(async (req, res) => {
       return res.end(JSON.stringify(await getFile(owner, name, ref, p)));
     } catch (e) { res.writeHead(404); return res.end(); }
   }
-  if (url.pathname === '/api/repo' || /^\/repos\/[^/]+(?:\/[^/]+)?\/?$/.test(url.pathname)) {
+  if (url.pathname === '/api/repo' || /^\/repos\/[^/]+(?:\/[^/]+){0,2}\/?$/.test(url.pathname)) {
     try {
-      const parts = url.pathname === '/api/repo' ? (url.searchParams.get('name') || '').split('/') : url.pathname.replace(/^\/repos\//, '').split('/');
+      const isOwner = async (l) => l.toLowerCase() === GH_USER.toLowerCase() || (await getOrgNames()).some((n) => n.login.toLowerCase() === l.toLowerCase());
+      const parts = (url.pathname === '/api/repo' ? (url.searchParams.get('name') || '') : url.pathname.replace(/^\/repos\//, '')).split('/').filter(Boolean);
+      let sub = '';
+      {
+        if (parts.length === 3) { sub = REPO_SUBS[parts.pop().toLowerCase()]; if (!sub) { res.writeHead(404); return res.end(); } }
+        else if (parts.length === 2 && REPO_SUBS[parts[1].toLowerCase()] && !(await isOwner(parts[0]))) sub = REPO_SUBS[parts.pop().toLowerCase()];
+      }
       const [owner, name] = parts.length >= 2 ? [parts[0], parts[1]] : [GH_USER, parts[0]];
-      const okOwner = owner.toLowerCase() === GH_USER.toLowerCase() || (await getOrgNames()).some((n) => n.login.toLowerCase() === owner.toLowerCase());
+      const okOwner = await isOwner(owner);
       if (!okOwner || !/^[A-Za-z0-9._-]+$/.test(name || '')) { res.writeHead(404); return res.end(); }
-      const d = await getRepoPage(owner, name.replace(/\/$/, ''));
+      const d = await getRepoPage(owner, name);
       if (url.pathname === '/api/repo') {
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, stale-while-revalidate=600' });
         return res.end(JSON.stringify(d));
       }
       const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
       const html = fs.readFileSync(path.join(PUBLIC, 'repo.html'), 'utf8')
-        .replace(/__TITLE__/g, esc(`${d.owner}/${d.name}`)).replace(/__DESC__/g, esc(d.description || `${d.owner}/${d.name} on GitHub`))
-        .replace(/__URL__/g, esc(`https://gh.lapius7.com/repos/${d.owner}/${d.name}`)).replace(/__IMG__/g, esc(`https://opengraph.githubassets.com/1/${d.owner}/${d.name}`));
+        .replace(/__TITLE__/g, esc(`${d.owner}/${d.name}${sub ? ' · ' + ({ issues: 'Issues', stars: 'Stargazers', forks: 'Forks', license: 'License' })[sub] : ''}`)).replace(/__SUB__/g, sub).replace(/__DESC__/g, esc(d.description || `${d.owner}/${d.name} on GitHub`))
+        .replace(/__URL__/g, esc(`https://gh.lapius7.com/repos/${d.owner}/${d.name}${sub ? '/' + sub : ''}`)).replace(/__IMG__/g, esc(`https://opengraph.githubassets.com/1/${d.owner}/${d.name}`));
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
       return res.end(html);
     } catch (e) { console.error(e.message); res.writeHead(404); return res.end(); }
