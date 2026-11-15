@@ -59,7 +59,7 @@
   addEventListener('popstate', nav);
 
   // ---- reveal-on-scroll, count-up, bar growth ----
-  const REVEAL = '.stat,.heatcard,.search,section.blk>h2,.two>div,.card,.repo,.item,.empty,.crumbs a.ic,.rhead,.md,.code,.fhead';
+  const REVEAL = '.stat,.heatcard,.search,section.blk>h2,.two>div,.card,.repo,.item,.empty,.crumbs a.ic,.rhead,.md';
   const fmt = (n, comma) => (comma ? n.toLocaleString() : String(n));
   const countUp = (el) => {
     const m = /^(\d[\d,]*)(\.\d+)?(\s[^\d]*)?$/.exec(el.textContent.trim());

@@ -34,7 +34,13 @@
     </header>
     <section class="blk" id="contribBlk"><h2>Contributors</h2><div class="avs" id="contribs"></div></section>
     <section class="blk"><h2>Languages</h2><div class="stack" id="stack"></div><div class="key" id="key"></div></section>
-    <section class="blk"><h2>Source</h2><div class="crumbp" id="crumb"></div><div id="files"></div><div id="viewer"></div></section>
+    <section class="blk" id="srcBlk"><h2>Source</h2>
+      <div class="src">
+        <div class="src-bar"><nav class="crumbp" id="crumb" aria-label="Path"></nav><input class="src-find" id="find" placeholder="Filter files" aria-label="Filter files" autocomplete="off" spellcheck="false"></div>
+        <div class="src-files" id="files"></div>
+      </div>
+      <div class="viewer" id="viewer" hidden></div>
+    </section>
     <section class="blk" id="readmeBlk"><h2>README</h2><article class="md" id="readme"></article></section>
     <section class="blk"><h2>Recent commits</h2><div id="commits"></div></section>
     <p class="foot2" id="foot"></p>
@@ -69,44 +75,131 @@
     if (!d.contributors.length) $('contribBlk').hidden = true;
     if (d.readme) $('readme').innerHTML = d.readme; else $('readmeBlk').hidden = true;
     // ---- source browser ----
-    const full = d.owner + '/' + d.name, kids = {};
-    d.tree.forEach((t) => { const i = t.p.lastIndexOf('/'); (kids[i < 0 ? '' : t.p.slice(0, i)] ||= []).push(t); });
+    const full = d.owner + '/' + d.name, kids = {}, dirs = new Set();
+    d.tree.forEach((t) => { const i = t.p.lastIndexOf('/'); (kids[i < 0 ? '' : t.p.slice(0, i)] ||= []).push(t); if (t.d) dirs.add(t.p); });
     const fmt = (b) => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(1) + ' MB';
-    const go = (dir) => {
-      const parts = dir ? dir.split('/') : [];
-      $('crumb').innerHTML = `<a href="#" data-d="">${esc(d.name)}</a>` + parts.map((x, i) => ` / <a href="#" data-d="${esc(parts.slice(0, i + 1).join('/'))}">${esc(x)}</a>`).join('');
-      const list = (kids[dir] || []).slice().sort((a, b) => b.d - a.d || a.p.localeCompare(b.p));
-      $('files').innerHTML = (dir ? `<a class="item" href="#" data-d="${esc(parts.slice(0, -1).join('/'))}"><div class="t">..</div></a>` : '') +
-        list.map((t) => `<a class="item" href="#" data-${t.d ? 'd' : 'f'}="${esc(t.p)}"><div class="t">${t.d ? '▸ ' : ''}${esc(t.p.split('/').pop())}</div><div class="r">${t.d ? '' : fmt(t.s)}</div></a>`).join('') || '<div class="empty">Empty</div>';
-      $('viewer').innerHTML = '';
-    };
     const EXT = { ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript', json: 'json', css: 'css', scss: 'scss', html: 'xml', xml: 'xml', svg: 'xml', py: 'python', rs: 'rust', go: 'go', sh: 'bash', bash: 'bash', zsh: 'bash', md: 'markdown', yml: 'yaml', yaml: 'yaml', toml: 'ini', ini: 'ini', java: 'java', kt: 'kotlin', c: 'c', h: 'c', cpp: 'cpp', cs: 'csharp', php: 'php', rb: 'ruby', sql: 'sql', lua: 'lua', swift: 'swift', ps1: 'powershell', vue: 'xml', nsi: 'ini', dockerfile: 'dockerfile' };
+    const LN = { typescript: 'TypeScript', javascript: 'JavaScript', json: 'JSON', css: 'CSS', scss: 'SCSS', xml: 'HTML / XML', python: 'Python', rust: 'Rust', go: 'Go', bash: 'Shell', markdown: 'Markdown', yaml: 'YAML', ini: 'Config', java: 'Java', kotlin: 'Kotlin', c: 'C', cpp: 'C++', csharp: 'C#', php: 'PHP', ruby: 'Ruby', sql: 'SQL', lua: 'Lua', swift: 'Swift', powershell: 'PowerShell', dockerfile: 'Dockerfile' };
+    const FC = { ts: '#3178c6', tsx: '#3178c6', js: '#f1e05a', jsx: '#f1e05a', mjs: '#f1e05a', cjs: '#f1e05a', json: '#cbb64a', css: '#8a63d2', scss: '#c6538c', html: '#e34c26', vue: '#41b883', svg: '#ffb13b', py: '#3572A5', go: '#00ADD8', rs: '#dea584', sh: '#89e051', bash: '#89e051', md: '#519aba', yml: '#cb171e', yaml: '#cb171e', toml: '#9c4221', java: '#b07219', kt: '#a97bff', c: '#6e8bb0', h: '#6e8bb0', cpp: '#f34b7d', cs: '#178600', php: '#4f5d95', rb: '#cc342d', sql: '#e38c00', lua: '#5b6cff', swift: '#f05138', dockerfile: '#2f8fb5' };
+    const IMG = /\.(png|jpe?g|gif|webp|avif|ico|bmp)$/i;
+    const extOf = (p) => { const b = p.split('/').pop().toLowerCase(); return b.includes('.') ? b.split('.').pop() : b; };
+    const SV = { dir: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M1.5 4a1.5 1.5 0 0 1 1.5-1.5h2.9c.4 0 .8.2 1.1.5l.9 1h4.6A1.5 1.5 0 0 1 14 5.5v6A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5z" fill="currentColor"/></svg>', file: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M4 1.7h4.6L12.3 5.4V13.5a.8.8 0 0 1-.8.8H4a.8.8 0 0 1-.8-.8v-11a.8.8 0 0 1 .8-.8z"/><path d="M8.4 1.9v3.6h3.6"/></svg>', up: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 4 3 7.5 6.5 11M3.5 7.5h6a3 3 0 0 1 3 3V12"/></svg>' };
+    const ico = (p, dir) => dir ? `<span class="fi dir">${SV.dir}</span>` : `<span class="fi" style="color:${FC[extOf(p)] || 'var(--muted)'}">${SV.file}</span>`;
+    const href = (p, dir) => `${location.pathname}#/${p.split('/').filter(Boolean).map(encodeURIComponent).join('/')}${dir && p ? '/' : ''}`;
+    const parseHash = () => {
+      const raw = location.hash.slice(1);
+      if (!raw.startsWith('/')) return { p: '' };
+      const [pp, ln] = raw.slice(1).split('#');
+      const p = pp.split('/').filter(Boolean).map((x) => { try { return decodeURIComponent(x); } catch { return x; } }).join('/');
+      const m = /^L(\d+)(?:-L?(\d+))?$/.exec(ln || '');
+      return { p, a: m ? +m[1] : 0, b: m ? +(m[2] || m[1]) : 0 };
+    };
+    let curDir = null, openPath = null, flt = '', seq = 0;
+    const markActive = () => document.querySelectorAll('#files .fr').forEach((a) => a.classList.toggle('on', a.dataset.p === openPath));
+    const drawList = () => {
+      const q = flt.trim().toLowerCase(), nm = (t) => t.p.split('/').pop();
+      const rows = (kids[curDir] || []).slice().sort((a, b) => b.d - a.d || a.p.localeCompare(b.p)).filter((t) => !q || nm(t).toLowerCase().includes(q));
+      const up = curDir && !q ? `<a class="fr up" href="${esc(href(curDir.includes('/') ? curDir.slice(0, curDir.lastIndexOf('/')) : '', 1))}"><span class="fi">${SV.up}</span><span class="nm">Parent directory</span></a>` : '';
+      $('files').innerHTML = up + rows.map((t, i) => `<a class="fr${t.p === openPath ? ' on' : ''}" style="--i:${Math.min(i, 14)}" href="${esc(href(t.p, t.d))}" data-p="${esc(t.p)}">${ico(t.p, t.d)}<span class="nm">${esc(nm(t))}</span><span class="sz">${t.d ? (kids[t.p] || []).length + ' items' : fmt(t.s)}</span></a>`).join('') || `<div class="src-empty">${q ? 'No matching files' : 'Empty'}</div>`;
+    };
+    const go = (dir) => {
+      if (dir === curDir) return;
+      curDir = dir; flt = ''; $('find').value = '';
+      const parts = dir ? dir.split('/') : [];
+      $('crumb').innerHTML = `<a href="${esc(href('', 1))}"${parts.length ? '' : ' aria-current="page"'}>${esc(d.name)}</a>` + parts.map((x, i) => `<i class="sep">/</i><a href="${esc(href(parts.slice(0, i + 1).join('/'), 1))}"${i === parts.length - 1 ? ' aria-current="page"' : ''}>${esc(x)}</a>`).join('');
+      drawList();
+    };
+    $('find').oninput = (e) => { flt = e.target.value; drawList(); };
+    $('find').onkeydown = (e) => { if (e.key === 'Enter') { const a = $('files').querySelector('.fr:not(.up)'); if (a) a.click(); } else if (e.key === 'Escape' && e.target.value) { e.target.value = ''; flt = ''; drawList(); e.stopPropagation(); } };
+
+    // line-by-line syntax highlighting: split highlight.js output on newlines, re-opening spans that cross lines
+    const splitLines = (html) => {
+      const out = [], stack = [], re = /<span[^>]*>|<\/span>|\n/g;
+      let cur = '', last = 0, m;
+      while ((m = re.exec(html))) {
+        cur += html.slice(last, m.index); last = re.lastIndex;
+        if (m[0] === '\n') { out.push(cur + '</span>'.repeat(stack.length)); cur = stack.join(''); }
+        else { m[0] === '</span>' ? stack.pop() : stack.push(m[0]); cur += m[0]; }
+      }
+      out.push(cur + '</span>'.repeat(stack.length));
+      return out;
+    };
     let hlp;
-    const hl = async (el, p) => {
-      const base = p.split('/').pop().toLowerCase(), lang = EXT[base.includes('.') ? base.split('.').pop() : base];
-      if (!lang || el.textContent.length > 120000) return;
+    const hlLines = async (text, lang) => {
+      if (!lang || text.length > 120000) return null;
       try {
         hlp ||= import('https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/+esm');
         const m = (await hlp).default;
-        el.innerHTML = m.highlight(el.textContent, { language: lang, ignoreIllegals: true }).value;
-      } catch {}
+        return splitLines(m.highlight(text, { language: lang, ignoreIllegals: true }).value);
+      } catch { return null; }
     };
-    const open = async (p) => {
-      $('viewer').innerHTML = '<div class="empty">Loading…</div>';
-      try {
-        const f = await (await fetch(`/api/repo-file?name=${encodeURIComponent(full)}&path=${encodeURIComponent(p)}&ref=${encodeURIComponent(d.defaultBranch)}`)).json();
-        const gh = `${d.url}/blob/${encodeURIComponent(d.defaultBranch)}/${p.split('/').map(encodeURIComponent).join('/')}`;
-        const head = `<div class="fhead"><b>${esc(p)}</b><a href="${esc(gh)}" target="_blank" rel="noopener">GitHub ↗</a></div>`;
-        if (f.text == null) { $('viewer').innerHTML = head + `<div class="empty">Binary or large file (${fmt(f.size)})</div>`; return; }
-        const lines = f.text.replace(/\n$/, '').split('\n');
-        $('viewer').innerHTML = head + `<pre class="code"><span class="ln">${lines.map((_, i) => i + 1).join('\n')}</span><code>${esc(f.text)}</code></pre>`;
-        hl($('viewer').querySelector('code'), p);
-        $('viewer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      } catch { $('viewer').innerHTML = '<div class="empty">Failed to load</div>'; }
+    const wrapPref = () => { try { return localStorage.getItem('srcwrap') === '1'; } catch { return false; } };
+    const hideViewer = () => { seq++; openPath = null; $('viewer').hidden = true; $('viewer').innerHTML = ''; markActive(); };
+    const open = async (p, a, b, jump) => {
+      openPath = p; markActive();
+      const v = $('viewer'), tok = ++seq, name = p.split('/').pop(), dirp = p.includes('/') ? p.slice(0, p.lastIndexOf('/') + 1) : '';
+      const lang = EXT[extOf(p)], ghUrl = `${d.url}/blob/${encodeURIComponent(d.defaultBranch)}/${p.split('/').map(encodeURIComponent).join('/')}`;
+      const rawUrl = `https://raw.githubusercontent.com/${d.owner}/${d.name}/${d.defaultBranch}/${p.split('/').map(encodeURIComponent).join('/')}`;
+      const head = (meta, extra) => `<div class="v-head"><div class="v-title">${ico(p, false)}<span class="v-name"><span class="v-dir">${esc(dirp)}</span><b>${esc(name)}</b></span></div><div class="v-meta">${meta}</div><div class="v-acts">${extra || ''}<a href="${esc(rawUrl)}" target="_blank" rel="noopener">Raw</a><a href="${esc(ghUrl)}" target="_blank" rel="noopener">GitHub ↗</a><button type="button" data-a="close" aria-label="Close file">✕</button></div></div>`;
+      v.hidden = false;
+      v.innerHTML = head('Loading…') + '<div class="v-state">Loading…</div>';
+      if (jump) v.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      let f;
+      try { f = await (await fetch(`/api/repo-file?name=${encodeURIComponent(full)}&path=${encodeURIComponent(p)}&ref=${encodeURIComponent(d.defaultBranch)}`)).json(); }
+      catch { if (tok === seq) v.innerHTML = head('') + '<div class="v-state">Failed to load</div>'; return; }
+      if (tok !== seq) return;
+      if (f.text == null) {
+        v.innerHTML = head(fmt(f.size)) + (IMG.test(p) ? `<div class="v-img"><img src="${esc(rawUrl)}" alt="${esc(name)}"></div>` : `<div class="v-state">Binary or large file (${fmt(f.size)}). <a href="${esc(ghUrl)}" target="_blank" rel="noopener">View on GitHub ↗</a></div>`);
+        if (!jump) v.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return;
+      }
+      const lines = f.text.replace(/\n$/, '').split('\n');
+      let selA = a || 0, selB = b || 0;
+      const wrap = wrapPref();
+      v.innerHTML = head(`${LN[lang] || 'Plain text'} · ${lines.length.toLocaleString()} lines · ${fmt(f.size)}`, `<button type="button" data-a="wrap" aria-pressed="${wrap}">Wrap</button><button type="button" data-a="copy">Copy</button>`) +
+        `<div class="code${wrap ? ' wrap' : ''}" role="region" aria-label="${esc(name)}" tabindex="0">${lines.map((l, i) => `<div class="l"><span class="n" data-n="${i + 1}"></span><span class="c">${esc(l)}</span></div>`).join('')}</div>`;
+      const code = v.querySelector('.code');
+      const lo = () => Math.min(selA, selB), hi = () => Math.max(selA, selB);
+      const paint = () => {
+        code.querySelectorAll('.l.sel').forEach((e) => e.classList.remove('sel'));
+        if (selA) for (let i = lo(); i <= hi(); i++) code.children[i - 1] && code.children[i - 1].classList.add('sel');
+      };
+      paint();
+      if (selA && code.children[lo() - 1]) code.scrollTop = Math.max(0, code.children[lo() - 1].offsetTop - code.clientHeight / 3);
+      code.onclick = (e) => {
+        const n = e.target.closest('.n'); if (!n) return;
+        const i = +n.dataset.n;
+        if (e.shiftKey && selA) selB = i; else if (selA === i && selB === i) selA = selB = 0; else selA = selB = i;
+        paint();
+        history.replaceState(null, '', href(p) + (selA ? '#L' + lo() + (hi() > lo() ? '-L' + hi() : '') : ''));
+      };
+      v.querySelector('.v-acts').onclick = async (e) => {
+        const btn = e.target.closest('button'); if (!btn) return;
+        if (btn.dataset.a === 'close') { history.pushState(null, '', href(curDir, 1)); hideViewer(); }
+        else if (btn.dataset.a === 'wrap') { const on = !code.classList.contains('wrap'); code.classList.toggle('wrap', on); btn.setAttribute('aria-pressed', on); try { localStorage.setItem('srcwrap', on ? '1' : '0'); } catch {} }
+        else if (btn.dataset.a === 'copy') {
+          const txt = selA ? lines.slice(lo() - 1, hi()).join('\n') : f.text;
+          try { await navigator.clipboard.writeText(txt); btn.textContent = 'Copied'; } catch { btn.textContent = 'Failed'; }
+          setTimeout(() => { btn.textContent = 'Copy'; }, 1400);
+        }
+      };
+      if (!jump) v.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      const hl = await hlLines(f.text.replace(/\n$/, ''), lang);
+      if (tok !== seq || !hl || hl.length !== lines.length) return;
+      code.querySelectorAll('.c').forEach((el, i) => { el.innerHTML = hl[i]; });
     };
-    $('files').onclick = $('crumb').onclick = (e) => { const a = e.target.closest('a[data-d],a[data-f]'); if (!a) return; e.preventDefault(); a.dataset.f != null ? open(a.dataset.f) : go(a.dataset.d); };
-    go('');
-    if (d.treeCut) $('files').insertAdjacentHTML('afterend', '<div class="empty">File list truncated</div>');
+    const route = (first) => {
+      const { p, a, b } = parseHash();
+      if (!p || dirs.has(p)) { go(p); hideViewer(); return; }
+      if (!d.tree.some((t) => t.p === p)) { go(''); hideViewer(); return; }
+      go(p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
+      open(p, a, b, first);
+    };
+    addEventListener('hashchange', () => route(false));
+    addEventListener('keydown', (e) => { if (e.key === 'Escape' && openPath && !document.querySelector('#cmdk.open') && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) { history.pushState(null, '', href(curDir, 1)); hideViewer(); } });
+    $('app').hidden = false;
+    route(true);
+    if (d.treeCut) $('files').insertAdjacentHTML('afterend', '<div class="src-empty">File list truncated</div>');
     $('commits').innerHTML = d.commits.map((c) => `<a class="item" href="${esc(c.url)}" target="_blank" rel="noopener"><div><div class="t">${esc(c.message)}</div><div class="s">${esc(c.author)}</div></div><div class="r">${ago(c.date)}</div></a>`).join('') || '<div class="empty">No commits</div>';
     $('foot').textContent = `Created ${new Date(d.createdAt).toLocaleDateString()} · ${d.defaultBranch}`;
     $('app').hidden = false;
