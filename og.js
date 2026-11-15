@@ -27,6 +27,19 @@ const FONT = {
   8: '01110 10001 10001 01110 10001 10001 01110', 9: '01110 10001 10001 01111 00001 00010 01100',
   '.': '00 00 00 00 00 11 11', '-': '00000 00000 00000 11111 00000 00000 00000',
   ',': '00 00 00 00 11 01 10', '/': '00001 00010 00010 00100 01000 01000 10000', ' ': '000 000 000 000 000 000 000',
+  _: '00000 00000 00000 00000 00000 00000 11111', ':': '00 11 11 00 11 11 00', ';': '00 11 11 00 11 01 10',
+  '#': '01010 01010 11111 01010 11111 01010 01010', '@': '01110 10001 10111 10101 10110 10000 01110',
+  '(': '00010 00100 01000 01000 01000 00100 00010', ')': '01000 00100 00010 00010 00010 00100 01000',
+  '+': '00000 00100 00100 11111 00100 00100 00000', "'": '00100 00100 01000 00000 00000 00000 00000',
+  '!': '00100 00100 00100 00100 00100 00000 00100', '?': '01110 10001 00001 00010 00100 00000 00100',
+  '&': '01100 10010 10100 01000 10101 10010 01101', '=': '00000 00000 11111 00000 11111 00000 00000',
+  '<': '00010 00100 01000 10000 01000 00100 00010', '>': '01000 00100 00010 00001 00010 00100 01000',
+  '[': '01110 01000 01000 01000 01000 01000 01110', ']': '01110 00010 00010 00010 00010 00010 01110',
+  '*': '00000 10101 01110 11111 01110 10101 00000', '%': '11001 11010 00010 00100 01000 01011 10011',
+  '"': '01010 01010 01010 00000 00000 00000 00000', '|': '00100 00100 00100 00100 00100 00100 00100',
+  '~': '00000 00000 01000 10101 00010 00000 00000', '^': '00100 01010 10001 00000 00000 00000 00000',
+  '\\': '10000 01000 01000 00100 00010 00010 00001', '`': '01000 00100 00000 00000 00000 00000 00000',
+  $: '00100 01111 10100 01110 00101 11110 00100',
 };
 
 const crcTable = Array.from({ length: 256 }, (_, n) => {
@@ -150,12 +163,12 @@ function canvas() {
       }
     }
   };
-  const png = () => {
+  const png = (level = 9) => {
     const raw = Buffer.alloc((W * 3 + 1) * H);
     for (let j = 0; j < H; j++) for (let i = 0; i < W * 3; i++) raw[j * (W * 3 + 1) + 1 + i] = Math.round(clamp(px[j * W * 3 + i] / 255) * 255);
     const ihdr = Buffer.alloc(13);
     ihdr.writeUInt32BE(W, 0); ihdr.writeUInt32BE(H, 4); ihdr[8] = 8; ihdr[9] = 2;
-    return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw, { level: 9 })), chunk('IEND', Buffer.alloc(0))]);
+    return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw, { level })), chunk('IEND', Buffer.alloc(0))]);
   };
   return { sky, scrim, dot, rrect, text, flush, width, png };
 }
@@ -194,4 +207,48 @@ function renderOg(s) {
   return c.png();
 }
 
-module.exports = { renderOg };
+// ---- per-page card: top label, title, description, meta line ----
+// Only the glyphs above exist, so text is reduced to ASCII upper case (non-ASCII is dropped).
+const asc = (v) => String(v == null ? '' : v).replace(/[{]/g, '(').replace(/[}]/g, ')').replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"')
+  .replace(/[^\x20-\x7e]/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
+
+function renderCard({ top = '', title = '', desc = '', meta = [] }) {
+  const c = canvas();
+  const WHITE = [244, 240, 255], MUTED = [176, 170, 214], ACCENT = [255, 204, 226];
+  const MAXW = W - 140;
+  const fit = (str, s, w) => { let t = str; while (t && c.width(t + '...', s) > w) t = t.slice(0, -1); return (t.trimEnd() || '') + '...'; };
+  // greedy wrap that prefers breaking after spaces and / - _ .; over-long tokens are cut by characters
+  const wrap = (str, s, maxLines) => {
+    const toks = str.match(/[^ \/\-_.]+[ \/\-_.]*|[ \/\-_.]+/g) || [];
+    const lines = [''];
+    for (let t of toks) {
+      const cur = () => lines[lines.length - 1];
+      if (c.width((cur() + t).trimEnd(), s) <= MAXW) { lines[lines.length - 1] += t; continue; }
+      if (cur()) lines.push('');
+      while (c.width(t.trimEnd(), s) > MAXW) {
+        let k = t.length - 1; while (k > 1 && c.width(t.slice(0, k), s) > MAXW) k--;
+        lines[lines.length - 1] = t.slice(0, k); lines.push(''); t = t.slice(k);
+      }
+      lines[lines.length - 1] = t;
+    }
+    const out = lines.map((l) => l.trim()).filter(Boolean);
+    if (out.length > maxLines) { const cut = out.slice(0, maxLines); cut[maxLines - 1] = fit(cut[maxLines - 1] + ' ' + out.slice(maxLines).join(' '), s, MAXW); return { lines: cut, cut: true }; }
+    return { lines: out, cut: false };
+  };
+  const draw = (lines, y, s, gap, col) => { lines.forEach((l, i) => c.text(l, 70, y + i * (7 * s + gap), s, col)); return y + (lines.length - 1) * (7 * s + gap) + 7 * s; };
+
+  const T = asc(title) || '-';
+  if (top) c.text(wrapOne(top), 70, 40, 4, ACCENT);
+  function wrapOne(v) { const t = asc(v); return c.width(t, 4) > MAXW ? fit(t, 4, MAXW) : t; }
+  let w = wrap(T, 10, 2), end;
+  if (w.cut) { w = wrap(T, 5, 3); end = draw(w.lines, 100, 5, 15, WHITE); } else end = draw(w.lines, 100, 10, 20, WHITE);
+  const D = asc(desc).length * 2 < String(desc || '').replace(/\s+/g, ' ').trim().length ? '' : asc(desc); // mostly non-ASCII text would leave only fragments
+  if (D) draw(wrap(D, 4, 2).lines, end + 40, 4, 14, MUTED);
+  const M = meta.map(asc).filter(Boolean).join(' / ');
+  if (M) c.text(c.width(M, 4) > MAXW ? fit(M, 4, MAXW) : M, 70, 480, 4, WHITE);
+  c.text('GH.LAPIUS7.COM', 70, 552, 4, MUTED);
+  c.sky(); c.scrim(); c.flush();
+  return c.png(1);
+}
+
+module.exports = { renderOg, renderCard };
