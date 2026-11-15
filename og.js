@@ -212,7 +212,7 @@ function renderOg(s) {
 const asc = (v) => String(v == null ? '' : v).replace(/[{]/g, '(').replace(/[}]/g, ')').replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"')
   .replace(/[^\x20-\x7e]/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
 
-function renderCard({ top = '', title = '', desc = '', meta = [] }) {
+function renderCard({ top = '', title = '', desc = '', meta = [], single = false }) {
   const c = canvas();
   const WHITE = [244, 240, 255], MUTED = [176, 170, 214], ACCENT = [255, 204, 226];
   const MAXW = W - 140;
@@ -240,8 +240,17 @@ function renderCard({ top = '', title = '', desc = '', meta = [] }) {
   const T = asc(title) || '-';
   if (top) c.text(wrapOne(top), 70, 40, 4, ACCENT);
   function wrapOne(v) { const t = asc(v); return c.width(t, 4) > MAXW ? fit(t, 4, MAXW) : t; }
-  let w = wrap(T, 10, 2), end;
-  if (w.cut) { w = wrap(T, 5, 3); end = draw(w.lines, 100, 5, 15, WHITE); } else end = draw(w.lines, 100, 10, 20, WHITE);
+  let w, end;
+  if (single) {
+    // one line: shrink the text until it fits, then drop leading directories (keep the file name)
+    const sz = [10, 8, 7, 6, 5, 4].find((z) => c.width(T, z) <= MAXW) || 4;
+    let t = T;
+    if (c.width(t, sz) > MAXW) { while (t.length > 1 && c.width('...' + t, sz) > MAXW) t = t.slice(1); t = '...' + t; }
+    end = draw([t], 100, sz, 0, WHITE);
+  } else {
+    w = wrap(T, 10, 2);
+  }
+  if (single) { /* drawn above */ } else if (w.cut) { w = wrap(T, 5, 3); end = draw(w.lines, 100, 5, 15, WHITE); } else end = draw(w.lines, 100, 10, 20, WHITE);
   const D = asc(desc).length * 2 < String(desc || '').replace(/\s+/g, ' ').trim().length ? '' : asc(desc); // mostly non-ASCII text would leave only fragments
   if (D) draw(wrap(D, 4, 2).lines, end + 40, 4, 14, MUTED);
   const M = meta.map(asc).filter(Boolean).join(' / ');

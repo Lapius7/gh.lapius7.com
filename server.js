@@ -528,7 +528,7 @@ async function cardFor(p) {
         meta.push(fmtSize(it.s));
       }
     } catch { /* no meta */ }
-    return { top: `${full} @ ${r}`, title: fpath, desc: d0.description, meta };
+    return { top: `${full} @ ${r}`, title: fpath, single: true, desc: d0.description, meta };
   }
   return { top: d0.owner, title: d0.name, desc: d0.description, meta: repoMeta };
 }
