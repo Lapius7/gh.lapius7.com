@@ -468,7 +468,8 @@ a.th-par:hover{text-decoration:underline}
 .im{color:var(--muted);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
 
 /* ---- fx2: light polish (see fx2.js) — no blur / blend / infinite animation ---- */
-.fx2 .card,.fx2 .repo{transform:perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .3s cubic-bezier(.2,0,0,1),border-color .2s;position:relative}
+.fx2 .card,.fx2 .repo{transition:transform .3s cubic-bezier(.2,0,0,1),border-color .2s;position:relative}
+.fx2 .card.tilt,.fx2 .repo.tilt{transform:perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg))}
 .fx2 .card.tilt,.fx2 .repo.tilt{transition:transform .08s linear,border-color .2s}
 .fx2 .card::after,.fx2 .repo::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .2s;background:radial-gradient(240px circle at var(--gx,50%) var(--gy,50%),rgba(255,255,255,.07),transparent 60%)}
 .fx2 .card.tilt::after,.fx2 .repo.tilt::after{opacity:1}
@@ -493,6 +494,4 @@ a.th-par:hover{text-decoration:underline}
 @keyframes drift1{to{transform:translate3d(18vmax,12vmax,0) scale(1.15)}}
 @keyframes drift2{to{transform:translate3d(-16vmax,10vmax,0) scale(.9)}}
 @keyframes drift3{to{transform:translate3d(12vmax,-14vmax,0) scale(1.2)}}
-#cglow{position:fixed;left:0;top:0;width:320px;height:320px;z-index:0;pointer-events:none;border-radius:50%;opacity:0;transition:opacity .4s;background:radial-gradient(circle,rgba(120,140,255,.10),transparent 62%);will-change:transform}
-#cglow.on{opacity:1}
-@media (prefers-reduced-motion:reduce){#aurora,#cglow{display:none}}
+@media (prefers-reduced-motion:reduce){#aurora{display:none}}

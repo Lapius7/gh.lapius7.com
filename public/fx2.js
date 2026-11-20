@@ -15,21 +15,18 @@
   document.addEventListener('visibilitychange', () => aur.classList.toggle('pause', document.hidden));
 
   if (fine) {
-    // cursor glow + card tilt: one rAF-throttled handler, no layout reads except the hovered card
-    const glow = document.createElement('div');
-    glow.id = 'cglow'; glow.setAttribute('aria-hidden', 'true');
-    document.body.append(glow);
+    // card tilt (small surfaces only): one rAF-throttled handler, no layout reads except the hovered card
     let tilted = null, f = 0, pe = null;
     const reset = (el) => { el.style.removeProperty('--rx'); el.style.removeProperty('--ry'); el.classList.remove('tilt'); };
     const step = () => {
       f = 0;
-      glow.style.transform = `translate3d(${pe.clientX - 160}px,${pe.clientY - 160}px,0)`;
       const t = pe.target.closest && pe.target.closest('.card,.repo');
       if (tilted && tilted !== t) { reset(tilted); tilted = null; }
       if (t) {
         const r = t.getBoundingClientRect();
+        if (r.width > 420 || r.height > 260) { if (tilted) { reset(tilted); tilted = null; } return; }
         const px = (pe.clientX - r.left) / r.width, py = (pe.clientY - r.top) / r.height;
-        const k = r.width > 420 ? 1.2 : 4;
+        const k = 4;
         t.style.setProperty('--rx', ((0.5 - py) * k).toFixed(2) + 'deg');
         t.style.setProperty('--ry', ((px - 0.5) * k * 1.4).toFixed(2) + 'deg');
         t.style.setProperty('--gx', (px * 100).toFixed(1) + '%');
@@ -37,8 +34,8 @@
         t.classList.add('tilt'); tilted = t;
       }
     };
-    addEventListener('pointermove', (e) => { pe = e; glow.classList.add('on'); if (!f) f = requestAnimationFrame(step); }, { passive: true });
-    document.addEventListener('pointerleave', () => { glow.classList.remove('on'); if (tilted) { reset(tilted); tilted = null; } });
+    addEventListener('pointermove', (e) => { pe = e; if (!f) f = requestAnimationFrame(step); }, { passive: true });
+    document.addEventListener('pointerleave', () => { if (tilted) { reset(tilted); tilted = null; } });
   }
 
   // hero entrance (runs once per element; class removed afterwards so hover transforms work)
