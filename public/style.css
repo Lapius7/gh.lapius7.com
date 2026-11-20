@@ -467,46 +467,17 @@ a.th-par:hover{text-decoration:underline}
 .lav{flex:none;width:36px;height:36px;border-radius:50%;background:var(--line)}
 .im{color:var(--muted);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
 
-/* ---- fx2: aurora, cursor glow, tilt, magnetic buttons, heatmap ripple, hero entrance (see fx2.js) ---- */
-#aurora{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
-#aurora i{position:absolute;width:52vmax;height:52vmax;border-radius:50%;filter:blur(90px);opacity:.16;will-change:transform;mix-blend-mode:screen}
-#aurora i:nth-child(1){left:-14vmax;top:-18vmax;background:radial-gradient(circle,#6d5bff,transparent 65%);animation:drift1 26s ease-in-out infinite alternate}
-#aurora i:nth-child(2){right:-18vmax;top:16vmax;background:radial-gradient(circle,var(--l4),transparent 65%);opacity:.1;animation:drift2 32s ease-in-out infinite alternate}
-#aurora i:nth-child(3){left:20vmax;bottom:-30vmax;background:radial-gradient(circle,#2b8bff,transparent 65%);opacity:.1;animation:drift3 38s ease-in-out infinite alternate}
-:root[data-theme="light"] #aurora i{mix-blend-mode:multiply;opacity:.1}
-:root[data-theme="light"] #aurora i:nth-child(2),:root[data-theme="light"] #aurora i:nth-child(3){opacity:.07}
-@keyframes drift1{to{transform:translate3d(18vmax,12vmax,0) scale(1.15)}}
-@keyframes drift2{to{transform:translate3d(-16vmax,10vmax,0) scale(.9)}}
-@keyframes drift3{to{transform:translate3d(12vmax,-14vmax,0) scale(1.2)}}
-#cglow{position:fixed;left:0;top:0;width:320px;height:320px;z-index:0;pointer-events:none;border-radius:50%;opacity:0;transition:opacity .4s;background:radial-gradient(circle,rgba(120,140,255,.10),transparent 62%);mix-blend-mode:screen}
-#cglow.on{opacity:1}
-:root[data-theme="light"] #cglow{mix-blend-mode:multiply;background:radial-gradient(circle,rgba(80,100,255,.08),transparent 62%)}
-
-/* tilt + sheen on surfaces */
-.fx2 .card,.fx2 .repo{transform:perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .35s cubic-bezier(.2,0,0,1),border-color .2s,box-shadow .3s;position:relative}
-.fx2 .card.tilt,.fx2 .repo.tilt{transition:transform .08s linear,border-color .2s,box-shadow .3s;box-shadow:0 10px 30px -14px rgba(0,0,0,.55)}
-.fx2 .card::after,.fx2 .repo::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(260px circle at var(--gx,50%) var(--gy,50%),rgba(255,255,255,.07),transparent 60%)}
-.fx2 .card.tilt::after,.fx2 .repo.tilt::after{opacity:1}
-
-/* avatar: slowly turning conic ring */
-.fx2 .profile img{position:relative;box-shadow:0 0 0 3px var(--bg),0 0 0 5px transparent;transition:transform .4s cubic-bezier(.3,1.4,.5,1),box-shadow .4s}
-.fx2 .profile img:hover{transform:scale(1.06) rotate(-3deg);box-shadow:0 0 0 3px var(--bg),0 0 26px 2px rgba(110,130,255,.45)}
-.fx2 .profile h1{background:linear-gradient(100deg,var(--text) 35%,#9aa8ff 50%,var(--text) 65%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:sheen 6s ease-in-out 1s infinite}
-@keyframes sheen{0%,60%,100%{background-position:100% 0}30%{background-position:0 0}}
-
-/* magnetic buttons + press ripple */
-.fx2 .kbtn,.fx2 .theme,.fx2 .totop{translate:var(--mx2,0) var(--my2,0);transition:translate .25s cubic-bezier(.2,0,0,1),background-color .15s,border-color .15s,opacity .2s,transform .4s}
-.fx2 .rip{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:currentColor;opacity:.25;pointer-events:none;animation:rip .65s cubic-bezier(.2,0,0,1) forwards}
-@keyframes rip{to{transform:scale(18);opacity:0}}
-
-/* heatmap: swell + glow */
-.fx2 #cells>*{transition:transform .18s cubic-bezier(.3,1.5,.5,1),filter .2s,background-color .2s}
-.fx2 #cells>*:hover{transform:scale(1.5);filter:brightness(1.25);z-index:2;position:relative}
-.fx2 #cells>.near{transform:scale(1.18)}
-
-/* hero entrance */
-.fx2 .hero{animation:heroIn .7s cubic-bezier(.2,0,0,1) var(--hd,0ms) both}
-@keyframes heroIn{from{opacity:0;transform:translateY(14px);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
-.fx2 .banner{opacity:var(--bo,1);filter:blur(var(--bf,0px))}
-
-@media (prefers-reduced-motion:reduce){#aurora,#cglow{display:none}}
+/* ---- fx2: light polish (see fx2.js) — no blur / blend / infinite animation ---- */
+.fx2 body{background-image:radial-gradient(60vmax 40vmax at 8% -5%,rgba(109,91,255,.10),transparent 70%),radial-gradient(50vmax 40vmax at 100% 40%,rgba(75,224,168,.05),transparent 70%);background-attachment:fixed}
+:root[data-theme="light"].fx2 body{background-image:radial-gradient(60vmax 40vmax at 8% -5%,rgba(109,91,255,.06),transparent 70%)}
+.fx2 .card,.fx2 .repo{transition:transform .2s cubic-bezier(.2,0,0,1),border-color .2s,box-shadow .2s}
+.fx2 .card:hover,.fx2 .repo:hover{transform:translateY(-2px);box-shadow:0 8px 20px -12px rgba(0,0,0,.5)}
+.fx2 .profile img{transition:transform .3s cubic-bezier(.3,1.4,.5,1),box-shadow .3s}
+.fx2 .profile img:hover{transform:scale(1.05);box-shadow:0 0 0 3px var(--bg),0 0 18px 2px rgba(110,130,255,.35)}
+.fx2 .kbtn,.fx2 .theme,.fx2 .totop{translate:var(--mx2,0) var(--my2,0);transition:translate .2s cubic-bezier(.2,0,0,1),background-color .15s,border-color .15s,opacity .2s,transform .4s}
+.fx2 .rip{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:currentColor;opacity:.22;pointer-events:none;animation:rip .6s cubic-bezier(.2,0,0,1) forwards}
+@keyframes rip{to{transform:scale(16);opacity:0}}
+.fx2 #cells>*{transition:transform .15s cubic-bezier(.3,1.5,.5,1)}
+.fx2 #cells>*:hover{transform:scale(1.4);position:relative;z-index:2}
+.fx2 .hero{animation:heroIn .5s cubic-bezier(.2,0,0,1) var(--hd,0ms) both}
+@keyframes heroIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
