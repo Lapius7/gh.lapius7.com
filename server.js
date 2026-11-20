@@ -591,6 +591,7 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
+  if (url.pathname === '/' && (req.method === 'GET' || req.method === 'HEAD')) { res.writeHead(302, { Location: '/overview' + url.search, 'Cache-Control': 'no-cache' }); return res.end(); }
   if (url.pathname.startsWith('/og/') && url.pathname.endsWith('.png')) {
     try {
       let p = url.pathname.slice(3, -4).replace(/\/+$/, '');
@@ -753,7 +754,11 @@ http.createServer(async (req, res) => {
   let pageName = '';
   if (rel === '/index.html') { try { const u = (await getStats('week')).user; pageName = u.name || u.login; } catch (e) { console.error(e.message); } }
   fs.readFile(file, (err, buf) => {
-    if (err) { res.writeHead(404); return res.end('Not found'); }
+    if (err) {
+      const ext = path.extname(file);
+      if (ext && ext !== '.html') { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Not found'); }
+      return fs.readFile(path.join(PUBLIC, '404.html'), (e2, b2) => { res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' }); res.end(e2 ? 'Not found' : b2); });
+    }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     // OG image URL gets a fresh random query so crawlers never reuse a stale cache
     const body = path.extname(file) === '.html'

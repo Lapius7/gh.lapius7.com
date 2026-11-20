@@ -100,7 +100,7 @@ a.item:hover .t{text-decoration:underline}
 .cell[data-l="1"]{background:var(--l1)}.cell[data-l="2"]{background:var(--l2)}.cell[data-l="3"]{background:var(--l3)}.cell[data-l="4"]{background:var(--l4)}
 .cell:not(.empty):hover{transform:scale(1.35);box-shadow:0 0 0 1.5px var(--text);position:relative;z-index:2}
 .cell.today{box-shadow:0 0 0 1.5px var(--muted)}
-.cell.empty{background:none;animation:none}
+.cell.empty{background:none;animation:none;visibility:hidden}
 .heat-foot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:11px;color:var(--muted);flex-wrap:wrap;gap:8px}
 .legend{display:flex;align-items:center;gap:4px}.legend i{width:11px;height:11px;border-radius:3px;display:block}
 #tip{position:fixed;z-index:20;pointer-events:none;background:var(--text);color:var(--bg);font-size:12px;padding:5px 9px;border-radius:6px;white-space:nowrap;opacity:0;transform:translate(-50%,-100%);transition:opacity .08s}

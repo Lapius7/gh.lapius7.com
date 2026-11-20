@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>404 · GitHub</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="/style.css?v=20261121e">
+<script>try{var t=localStorage.getItem('theme');if(t){document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t}}catch(e){}</script>
+<style>
+.err{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;gap:10px}
+.err .code{font-size:clamp(72px,18vw,140px);font-weight:600;line-height:1;letter-spacing:-.04em;background:linear-gradient(135deg,var(--l4),#6d5bff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.err h1{font-size:18px;font-weight:500;margin:4px 0 0}
+.err p{color:var(--muted);font-size:14px;margin:0 0 14px;max-width:360px;line-height:1.7}
+.err .btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.err a.b{display:inline-flex;align-items:center;height:36px;padding:0 16px;border:1px solid var(--line);border-radius:8px;color:var(--text);text-decoration:none;font-size:14px;line-height:20px;background:var(--panel);transition:border-color .15s,transform .15s}
+.err a.b:hover{border-color:var(--muted);transform:translateY(-1px)}
+.err a.b.pri{background:var(--text);color:var(--bg);border-color:var(--text)}
+.err .path{font-family:ui-monospace,monospace;font-size:12px;color:var(--muted);max-width:90vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (prefers-reduced-motion:no-preference){.err>*{animation:heroIn .5s cubic-bezier(.2,0,0,1) both}.err>*:nth-child(2){animation-delay:.06s}.err>*:nth-child(3){animation-delay:.12s}.err>*:nth-child(4){animation-delay:.18s}.err>*:nth-child(5){animation-delay:.24s}}
+@keyframes heroIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<main class="err">
+  <div class="code">404</div>
+  <h1>ページが見つかりません</h1>
+  <p>URL が間違っているか、ページが移動・削除された可能性があります。</p>
+  <div class="path" id="p"></div>
+  <div class="btns"><a class="b pri" href="/overview">Overview へ戻る</a><a class="b" href="/repos">Repositories</a></div>
+</main>
+<script>document.getElementById('p').textContent=location.pathname</script>
+</body>
+</html>
