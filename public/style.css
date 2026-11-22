@@ -9,7 +9,7 @@
 }
 *{box-sizing:border-box;margin:0}
 body{background:var(--bg);color:var(--text);font:14px/1.5 Inter,system-ui,-apple-system,"Segoe UI","Noto Sans JP",sans-serif;-webkit-font-smoothing:antialiased}
-.banner{position:relative;height:380px;overflow:hidden;-webkit-mask-image:linear-gradient(to bottom,#000 0%,rgba(0,0,0,.97) 14%,rgba(0,0,0,.88) 26%,rgba(0,0,0,.72) 38%,rgba(0,0,0,.54) 50%,rgba(0,0,0,.36) 62%,rgba(0,0,0,.2) 74%,rgba(0,0,0,.08) 86%,rgba(0,0,0,.02) 94%,transparent 100%);mask-image:linear-gradient(to bottom,#000 0%,rgba(0,0,0,.97) 14%,rgba(0,0,0,.88) 26%,rgba(0,0,0,.72) 38%,rgba(0,0,0,.54) 50%,rgba(0,0,0,.36) 62%,rgba(0,0,0,.2) 74%,rgba(0,0,0,.08) 86%,rgba(0,0,0,.02) 94%,transparent 100%)}
+.banner{position:relative;height:380px;overflow:hidden;-webkit-mask-image:linear-gradient(to bottom,#000 0%,rgba(0,0,0,.97) 14%,rgba(0,0,0,.88) 26%,rgba(0,0,0,.72) 38%,rgba(0,0,0,.54) 50%,rgba(0,0,0,.36) 62%,rgba(0,0,0,.2) 74%,rgba(0,0,0,.06) 80%,rgba(0,0,0,.015) 88%,transparent 94%);mask-image:linear-gradient(to bottom,#000 0%,rgba(0,0,0,.97) 14%,rgba(0,0,0,.88) 26%,rgba(0,0,0,.72) 38%,rgba(0,0,0,.54) 50%,rgba(0,0,0,.36) 62%,rgba(0,0,0,.2) 74%,rgba(0,0,0,.06) 80%,rgba(0,0,0,.015) 88%,transparent 94%)}
 .banner canvas{width:100%;height:100%;display:block}
 .banner::after{content:none}
 .wrap{max-width:684px;margin:0 auto;padding:0 16px}
@@ -188,7 +188,7 @@ section.blk[hidden]{display:none}
 /* ---- fx: motion and navigation extras (see fx.js) ---- */
 h1,h2{text-wrap:balance}
 #fxprog{position:fixed;top:0;left:0;right:0;height:2px;z-index:30;pointer-events:none;background:linear-gradient(90deg,var(--l3),var(--l4));transform-origin:0 50%;transform:scaleX(var(--p,0))}
-.banner canvas{will-change:transform}
+.banner canvas{will-change:auto}
 
 /* press feedback */
 .years button,.pager button,.tabs button,.av{transition:color .15s,background-color .15s,border-color .15s,transform .15s}
