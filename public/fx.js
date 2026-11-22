@@ -21,7 +21,6 @@
     const y = scrollY, max = root.scrollHeight - innerHeight;
     prog.style.setProperty('--p', max > 0 ? Math.min(1, y / max).toFixed(4) : 0);
     top.classList.toggle('show', y > 640);
-    if (bn && !reduce) bn.style.transform = `translate3d(0,${(Math.min(Math.max(y, 0), 700) * 0.3).toFixed(1)}px,0)`;
   };
   addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
   addEventListener('resize', onScroll);
