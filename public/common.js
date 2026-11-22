@@ -37,26 +37,27 @@ const banner = (() => {
     return stops[stops.length - 1][1];
   };
   // Sky follows the visitor's local clock: night -> dawn -> day -> dusk, blended from the two palettes above.
-  const hourNow = () => { const d = new Date(); return d.getHours() + d.getMinutes() / 60; };
+  // Local time is read once at load, then advanced with the monotonic clock (no polling of Date).
+  const T0 = Date.now(), P0 = performance.now();
+  const clockNow = () => new Date(T0 + (performance.now() - P0));
+  const hourNow = () => { const d = clockNow(); return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600; };
+  // Continuous: sun elevation as a sine of the hour (sunrise ~6, sunset ~18); daylight and glow are smooth functions of it.
   const phaseOf = (h) => {
-    const k = smooth(5, 7.5, h) * (1 - smooth(16.5, 19, h));
-    const warm = Math.max(0, 1 - Math.abs(h - 6.3) / 1.7, 1 - Math.abs(h - 18) / 1.7);
-    return { k, warm, name: h >= 5 && h < 8 ? 'Dawn' : h >= 8 && h < 16.5 ? 'Day' : h >= 16.5 && h < 19.5 ? 'Dusk' : 'Night' };
+    const el = Math.sin(Math.PI * (h - 6) / 12);
+    const k = smooth(-0.3, 0.4, el), warm = Math.exp(-Math.pow(el / 0.3, 2));
+    return { k, warm, name: el > 0.45 ? 'Day' : el > -0.05 ? (h < 12 ? 'Dawn' : 'Dusk') : el > -0.3 ? (h < 12 ? 'Dawn' : 'Dusk') : 'Night' };
   };
   const mixAny = (a, b, k) => typeof a === 'number' ? a + (b - a) * k : typeof a === 'boolean' ? (k < 0.5 ? a : b)
     : Array.isArray(a) && Array.isArray(a[0]) ? a.map((st, i) => [st[0], mix(st[1], b[i][1], k)]) : mix(a, b, k);
-  let cachedAt = 0, cached = null;
   const themeNow = () => {
-    const n = Date.now();
-    if (cached && n - cachedAt < 5000) return cached;
     const { k, warm } = phaseOf(hourNow()), T = {};
     for (const key of Object.keys(THEMES.dark)) T[key] = mixAny(THEMES.dark[key], THEMES.light[key], k);
-    if (warm > 0) {
+    if (warm > 0.01) {
       const tint = [255, 150, 108];
-      T.sky = T.sky.map(([p, c]) => [p, mix(c, tint, warm * 0.45 * p)]);
+      T.sky = T.sky.map(([p, c]) => [p, mix(c, tint, warm * 0.4 * p)]);
       T.glow = mix(T.glow, tint, warm * 0.7);
     }
-    cachedAt = n; return (cached = T);
+    return T;
   };
   // Compact local-time chip in the banner corner.
   const tzChip = (host) => {
@@ -64,12 +65,12 @@ const banner = (() => {
     const el = document.createElement('div'); el.className = 'tz'; host.appendChild(el);
     const abbr = (() => { try { return new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName').value; } catch { return ''; } })();
     const paint = () => {
-      const d = new Date(), off = -d.getTimezoneOffset(), sign = off >= 0 ? '+' : '-', ao = Math.abs(off);
+      const d = clockNow(), off = -d.getTimezoneOffset(), sign = off >= 0 ? '+' : '-', ao = Math.abs(off);
       const utc = 'UTC' + sign + Math.floor(ao / 60) + (ao % 60 ? ':' + String(ao % 60).padStart(2, '0') : '');
       const ph = phaseOf(hourNow());
       el.innerHTML = `<i class="tz-dot" data-p="${ph.name}"></i><b>${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}</b><span>${abbr && !/^GMT[+-]/.test(abbr) ? abbr + ' · ' : ''}${utc} · ${ph.name}</span>`;
     };
-    paint(); setInterval(paint, 20000);
+    paint(); const tick = () => { paint(); setTimeout(tick, 60000 - (clockNow().getSeconds() * 1000 + clockNow().getMilliseconds()) + 20); }; setTimeout(tick, 60000 - (clockNow().getSeconds() * 1000 + clockNow().getMilliseconds()) + 20);
   };
   const WAKE_R = 5, DECAY = 0.95;
 
