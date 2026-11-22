@@ -33,7 +33,7 @@ const n = (v) => Number(v || 0).toLocaleString('en-US');
 const row = {
   followers: (u) => `<a class="ir" href="${esc(u.url)}" target="_blank" rel="noopener"><img class="lav" src="${esc(u.avatar)}" alt="" loading="lazy"><div class="ib"><div class="it">${esc(u.name || u.login)}</div><div class="im">@${esc(u.login)}${u.bio ? ' · ' + esc(u.bio) : ''}</div></div></a>`,
   stars: (r) => `<a class="ir" href="/repos/${encodeURIComponent(r.name)}"><div class="ib"><div class="it">${esc(r.name)}</div><div class="im">${esc(r.description)}</div><div class="im">${r.lang ? `<span class="dot" style="background:${esc(r.lang.color || '#888')}"></span>${esc(r.lang.name)} · ` : ''}★ ${n(r.stars)} · ${n(r.forks)} forks · ${esc(ago(r.at))}</div></div></a>`,
-  gists: (g) => `<a class="ir" href="/gist/${esc(g.id)}"><div class="ib"><div class="it">${esc(g.files[0] || g.id)}</div><div class="im">${esc(g.description)}</div><div class="im">★ ${n(g.stars)} · ${esc(ago(g.at))}</div></div></a>`,
+  gists: (g) => `<a class="ir" href="/gists/${esc(g.id)}"><div class="ib"><div class="it">${esc(g.files[0] || g.id)}</div><div class="im">${esc(g.description)}</div><div class="im">★ ${n(g.stars)} · ${esc(ago(g.at))}</div></div></a>`,
 }; row.following = row.followers;
 const tabs = (counts) => { $('ltabs').innerHTML = TABS.map(([k, l]) => `<a href="/${k}" class="${k === KIND ? 'on' : ''}"${k === KIND ? ' aria-current="page"' : ''}>${l}${counts[k] != null ? `<span class="pill">${n(counts[k])}</span>` : ''}</a>`).join(''); };
 tabs({});

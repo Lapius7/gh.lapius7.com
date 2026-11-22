@@ -742,7 +742,9 @@ http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ id, description: g.description || '', url: g.html_url, updated: g.updated_at, files }));
     } catch (e) { res.writeHead(404); return res.end(); }
   }
-  if (/^\/gist\/[0-9a-fA-F]{20,40}\/?$/.test(url.pathname)) {
+  const og = url.pathname.match(/^\/gist\/([0-9a-fA-F]{20,40})\/?$/);
+  if (og) { res.writeHead(301, { Location: '/gists/' + og[1] }); return res.end(); }
+  if (/^\/gists\/[0-9a-fA-F]{20,40}\/?$/.test(url.pathname)) {
     return fs.readFile(path.join(PUBLIC, 'gist.html'), (err, buf) => {
       res.writeHead(err ? 500 : 200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
       res.end(err ? undefined : buf);
