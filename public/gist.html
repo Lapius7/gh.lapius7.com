@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gist · GitHub</title>
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Lapius7 · GitHub">
+<meta property="og:title" content="Gist · GitHub">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232ecc8f'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css?v=20261121e">
+</head>
+<body class="loading">
+<div id="tip"></div>
+<button class="theme" id="theme" aria-label="Toggle theme">◐</button>
+<div class="banner"><canvas id="bn"></canvas></div>
+<main class="wrap">
+  <div id="loader" role="status" aria-live="polite"><div class="wave" aria-hidden="true"></div><span>Loading gist<b class="dots"></b></span></div>
+  <a class="back" href="/gists">← Gists</a>
+  <header class="rhead">
+    <h1 id="gname"></h1>
+    <p class="rdesc" id="gdesc"></p>
+    <div class="chips" id="gmeta"></div>
+  </header>
+  <div id="gfiles"></div>
+</main>
+<script src="/common.js?v=20261012d"></script>
+<script type="text/page">
+const ID = location.pathname.split('/')[2] || '';
+const fail = (m) => { $('gname').textContent = m; document.body.classList.remove('loading'); };
+(async () => {
+  try {
+    const r = await fetch('/api/gist?id=' + encodeURIComponent(ID));
+    if (!r.ok) throw 0;
+    const g = await r.json();
+    document.title = (g.files[0]?.name || 'Gist') + ' · GitHub';
+    $('gname').textContent = g.files[0]?.name || ID;
+    $('gdesc').textContent = g.description || '';
+    $('gmeta').innerHTML = `<span class="chip">${g.files.length} file${g.files.length > 1 ? 's' : ''}</span><span class="chip">updated ${new Date(g.updated).toLocaleDateString('en-CA')}</span><a class="chip" href="${esc(g.url)}" target="_blank" rel="noopener">View on GitHub</a>`;
+    $('gfiles').innerHTML = g.files.map((f) => `<section class="blk"><h2>${esc(f.name)}</h2><pre class="code" style="white-space:pre;overflow:auto;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--panel)"><code>${esc(f.content)}</code></pre>${f.truncated ? '<div class="im">Truncated. Open on GitHub for the full file.</div>' : ''}</section>`).join('');
+    document.body.classList.remove('loading');
+  } catch { fail('Gist not found'); }
+})();
+window.SPA_PAGE = null;
+</script>
+<script src="/router.js?v=20261115m"></script>
+<script src="/fx.js?v=20261115m"></script>
+<script src="/fx2.js?v=20261121e"></script>
+</body>
+</html>

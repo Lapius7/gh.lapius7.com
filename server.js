@@ -731,6 +731,23 @@ http.createServer(async (req, res) => {
       return res.end(JSON.stringify(await getList(kind, after)));
     } catch (e) { console.error(e.message); res.writeHead(502, { 'Content-Type': 'application/json' }); return res.end('{"error":"upstream_error"}'); }
   }
+  if (url.pathname === '/api/gist') {
+    const id = url.searchParams.get('id') || '';
+    if (!/^[0-9a-f]{20,40}$/i.test(id)) { res.writeHead(400); return res.end(); }
+    try {
+      const g = await rest('/gists/' + id);
+      if (!g.public || (g.owner?.login || '').toLowerCase() !== GH_USER.toLowerCase()) { res.writeHead(404); return res.end(); }
+      const files = Object.values(g.files).slice(0, 20).map((f) => ({ name: f.filename, content: (f.content || '').slice(0, 200000), truncated: !!f.truncated || (f.content || '').length > 200000 }));
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, stale-while-revalidate=600' });
+      return res.end(JSON.stringify({ id, description: g.description || '', url: g.html_url, updated: g.updated_at, files }));
+    } catch (e) { res.writeHead(404); return res.end(); }
+  }
+  if (/^\/gist\/[0-9a-fA-F]{20,40}\/?$/.test(url.pathname)) {
+    return fs.readFile(path.join(PUBLIC, 'gist.html'), (err, buf) => {
+      res.writeHead(err ? 500 : 200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+      res.end(err ? undefined : buf);
+    });
+  }
   const lk = url.pathname.match(/^\/(followers|following|stars|gists)\/?$/);
   if (lk) {
     return fs.readFile(path.join(PUBLIC, 'list.html'), (err, buf) => {

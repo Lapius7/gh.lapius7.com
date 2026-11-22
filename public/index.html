@@ -260,7 +260,7 @@ function render(s){
 
   $('gistblk').hidden = !s.gists.length;
   $('gists').innerHTML = s.gists.map(g => { const f = g.files[0] || {}; const more = g.files.length > 1 ? ` <span class="pill">+${g.files.length - 1}</span>` : '';
-    return `<a class="repo" href="${esc(g.url)}" target="_blank" rel="noopener"><div><div class="rn">${esc(f.name || g.id)}${more}</div><div class="rd">${esc(g.description || '')}</div></div>
+    return `<a class="repo" href="/gist/${esc(g.id)}"><div><div class="rn">${esc(f.name || g.id)}${more}</div><div class="rd">${esc(g.description || '')}</div></div>
     <div class="rm">${f.lang ? `<span class="dot" style="background:${esc(f.color || '#888')}"></span>${esc(f.lang)}` : ''}${g.stars ? ` · ★ ${g.stars}` : ''}<br>${new Date(g.pushedAt).toLocaleDateString()}</div></a>`; }).join('');
 
   drawOpen(document.querySelector('#tabs button.on')?.dataset.k || 'prs');
