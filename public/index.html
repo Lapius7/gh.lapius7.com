@@ -33,7 +33,7 @@
 
   <section id="app" class="skeleton">
     <div class="tabs ptabs" id="ptabs" role="tablist">
-      <button data-p="overview" class="on">Overview</button><button data-p="work">Work</button><button data-p="activity">Activity</button><button data-p="repos">Repositories</button></div>
+      <button data-p="overview" class="on">Overview</button><button data-p="work">Work</button><button data-p="activity">Activity</button><button data-p="repos">Repositories</button><button data-p="gists">Gists</button></div>
     <div class="pane" data-p="overview">
     <div class="row">
       <h2>Overview</h2>
@@ -73,7 +73,6 @@
     <div class="pane" data-p="work" hidden>
     <section class="blk" id="pinnedblk" hidden><h2>Pinned</h2><div class="cards" id="pinned"></div></section>
 
-    <section class="blk" id="gistblk" hidden><h2>Gists</h2><div id="gists"></div></section>
 
     <section class="blk"><div class="tabs" id="tabs">
       <button data-k="prs" class="on">Open PRs</button><button data-k="reviews">Review requests</button><button data-k="issues">Assigned issues</button></div>
@@ -84,6 +83,10 @@
     <div class="pane" data-p="activity" hidden>
     <section class="blk"><h2>Recent activity</h2><div id="events"></div></section>
     <section class="blk"><h2>GitHub Actions</h2><div id="runs"></div></section>
+    </div>
+
+    <div class="pane" data-p="gists" hidden>
+    <section class="blk" id="gistblk" style="margin-top:0"><div id="gists"></div></section>
     </div>
 
     <div class="pane" data-p="repos" hidden>
@@ -102,7 +105,7 @@
 <script type="text/page">
 let repos = [];
 
-const PANES = ['overview', 'work', 'activity', 'repos'];
+const PANES = ['overview', 'work', 'activity', 'repos', 'gists'];
 const paneFromPath = () => { const p = location.pathname.replace(/\//g, ''); return PANES.includes(p) ? p : 'overview'; };
 function showPane(p){
   document.querySelectorAll('#ptabs button').forEach(b => b.classList.toggle('on', b.dataset.p === p));
@@ -258,7 +261,7 @@ function render(s){
   $('pinnedblk').hidden = !s.pinned.length;
   $('pinned').innerHTML = s.pinned.map(r => `<a class="card" href="${esc(r.url)}" target="_blank" rel="noopener"><div class="rn">${esc(r.name)}</div><div class="rd">${esc(r.description || '')}</div><div class="rd" style="margin-top:8px">${r.primaryLanguage ? `<span class="dot" style="background:${esc(r.primaryLanguage.color||'#888')}"></span>${esc(r.primaryLanguage.name)} · ` : ''}★ ${r.stargazerCount} · ⑂ ${r.forkCount}</div></a>`).join('');
 
-  $('gistblk').hidden = !s.gists.length;
+  if (!s.gists.length) $('gists').innerHTML = '<div class="src-empty">No public gists</div>'; else 
   $('gists').innerHTML = s.gists.map(g => { const f = g.files[0] || {}; const more = g.files.length > 1 ? ` <span class="pill">+${g.files.length - 1}</span>` : '';
     return `<a class="repo" href="/gist/${esc(g.id)}"><div><div class="rn">${esc(f.name || g.id)}${more}</div><div class="rd">${esc(g.description || '')}</div></div>
     <div class="rm">${f.lang ? `<span class="dot" style="background:${esc(f.color || '#888')}"></span>${esc(f.lang)}` : ''}${g.stars ? ` · ★ ${g.stars}` : ''}<br>${new Date(g.pushedAt).toLocaleDateString()}</div></a>`; }).join('');
@@ -306,7 +309,7 @@ $('repo').onchange = drawStats;
 $('tabs').onclick = (e) => e.target.dataset.k && drawOpen(e.target.dataset.k);
 $('q').oninput = drawRepos;
 load();
-window.SPA_PAGE = { owns: (p) => /^\/(overview|work|activity|repos)?\/?$/.test(p), nav: (u) => { history.pushState(null, '', u); showPane(paneFromPath()); } };
+window.SPA_PAGE = { owns: (p) => /^\/(overview|work|activity|repos|gists)?\/?$/.test(p), nav: (u) => { history.pushState(null, '', u); showPane(paneFromPath()); } };
 </script>
 <script src="/router.js?v=20261115m"></script>
 <script src="/fx.js?v=20261115m"></script>

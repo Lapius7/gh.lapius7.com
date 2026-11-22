@@ -498,7 +498,7 @@ const ago = (iso) => { const d = (Date.now() - new Date(iso)) / 86400000; return
 const fmtSize = (b) => (b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`);
 async function cardFor(p) {
   const m = p.match(/^\/repos\/(.+)$/);
-  if (!m && /^\/(followers|following|stars|gists)$/.test(p)) {
+  if (!m && /^\/(followers|following|stars)$/.test(p)) {
     const u = (await getStats('week')).user, kind = p.slice(1);
     return { top: u.login, title: LIST_KINDS[kind], desc: u.bio, stats: [[fmtC(u.followers), 'FOLLOWERS'], [fmtC(u.following), 'FOLLOWING'], [fmtC(u.stars), 'STARS'], [fmtC(u.gists), 'GISTS']], meta: [] };
   }
@@ -748,7 +748,7 @@ http.createServer(async (req, res) => {
       res.end(err ? undefined : buf);
     });
   }
-  const lk = url.pathname.match(/^\/(followers|following|stars|gists)\/?$/);
+  const lk = url.pathname.match(/^\/(followers|following|stars)\/?$/);
   if (lk) {
     return fs.readFile(path.join(PUBLIC, 'list.html'), (err, buf) => {
       res.writeHead(err ? 500 : 200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
@@ -765,7 +765,7 @@ http.createServer(async (req, res) => {
       }
     } catch (e) { console.error(e.message); }
   }
-  const rel = url.pathname === '/' || /^\/(overview|work|activity|repos)\/?$/.test(url.pathname) ? '/index.html' : decodeURIComponent(url.pathname);
+  const rel = url.pathname === '/' || /^\/(overview|work|activity|repos|gists)\/?$/.test(url.pathname) ? '/index.html' : decodeURIComponent(url.pathname);
   const file = path.join(PUBLIC, path.normalize(rel));
   if (!file.startsWith(PUBLIC + path.sep)) { res.writeHead(403); return res.end(); }
   let pageName = '';

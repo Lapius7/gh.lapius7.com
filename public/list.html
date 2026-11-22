@@ -28,7 +28,7 @@
 <script src="/common.js?v=20261012d"></script>
 <script type="text/page">
 const KIND = '__KIND__';
-const TABS = [['followers', 'Followers'], ['following', 'Following'], ['stars', 'Stars'], ['gists', 'Gists']];
+const TABS = [['followers', 'Followers'], ['following', 'Following'], ['stars', 'Stars']];
 const n = (v) => Number(v || 0).toLocaleString('en-US');
 const row = {
   followers: (u) => `<a class="ir" href="${esc(u.url)}" target="_blank" rel="noopener"><img class="lav" src="${esc(u.avatar)}" alt="" loading="lazy"><div class="ib"><div class="it">${esc(u.name || u.login)}</div><div class="im">@${esc(u.login)}${u.bio ? ' · ' + esc(u.bio) : ''}</div></div></a>`,
