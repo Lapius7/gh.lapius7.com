@@ -1,7 +1,7 @@
 // router.js — client-side navigation: swaps <main> and the page script instead of reloading.
 // Loaded after common.js and the page's inline <script type="text/page">, before fx.js.
 (() => {
-  const PANE = '(?:overview|work|activity|repos|gists)';
+  const PANE = '(?:overview|work|activity|repos|gists|sourcebin)';
   const kindOf = (p) => {
     if (p === '/' || new RegExp('^/' + PANE + '/?$').test(p)) return 'index';
     if (/^\/repos\/[^/]+/.test(p)) return 'repo';

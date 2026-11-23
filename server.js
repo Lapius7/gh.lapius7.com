@@ -266,6 +266,38 @@ async function buildYear(y) {
 
 const getStats = (period) => cached('stats:' + period, TTL, () => buildStats(period));
 
+// ---- SourceBin (bin.lapius7.com): owner's public bins only. Token stays server-side. ----
+const BIN_API = 'https://bin.lapius7.com/api';
+const BIN_SITE = 'https://bin.lapius7.com';
+const BIN_LIMIT = 100;
+async function binFetch(p, opt = {}) {
+  const r = await fetch(BIN_API + p, {
+    ...opt,
+    headers: { Authorization: `Bearer ${process.env.BIN_TOKEN}`, 'Content-Type': 'application/json', 'Accept-Profile': 'bin', 'Content-Profile': 'bin', 'User-Agent': 'gh.lapius7.com', ...opt.headers },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!r.ok) throw new Error('bin api ' + r.status);
+  return r.json();
+}
+// Only items that are explicitly public are kept, even though the RPC is also asked to filter.
+const publicBins = (items) => (Array.isArray(items) ? items : []).filter((g) => g && g.visibility === 'public' && typeof g.id === 'string' && /^[0-9a-f]{16}$/.test(g.id))
+  .map((g) => ({
+    id: g.id,
+    title: g.title || '',
+    description: g.description || '',
+    files: (g.files || []).map((f) => f.filename).filter(Boolean).slice(0, 5),
+    fileCount: (g.files || []).length,
+    createdAt: g.created_at,
+    url: `${BIN_SITE}/${g.id}`,
+  }));
+async function buildBins() {
+  const { user_id } = await binFetch('/bin/token');
+  if (!user_id) throw new Error('bin token has no owner');
+  const out = await binFetch('/rest/v1/rpc/list_gists', { method: 'POST', body: JSON.stringify({ p_owner: user_id, p_limit: BIN_LIMIT, p_offset: 0, p_sort: 'created', p_visibility: 'public' }) });
+  return { items: publicBins(out && out.items) };
+}
+const getBins = () => cached('bins', TTL, buildBins);
+
 
 // ---- organizations ----
 let orgList = { v: [], me: null };
@@ -613,6 +645,17 @@ http.createServer(async (req, res) => {
       return res.end(v);
     } catch (e) { console.error('og card', e.message); res.writeHead(404); return res.end(); }
   }
+  if (url.pathname === '/api/bins') {
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=600');
+    res.setHeader('Content-Type', 'application/json');
+    if (!process.env.BIN_TOKEN) { res.writeHead(200); return res.end(JSON.stringify({ items: [], error: 'unavailable' })); }
+    let body;
+    try { body = await getBins(); }
+    catch (e) { console.error('bins', e.message); body = { items: [], error: 'unavailable' }; }
+    res.writeHead(200);
+    res.end(JSON.stringify(body));
+    return;
+  }
   if (url.pathname === '/api/stats') {
     const period = PERIODS.includes(url.searchParams.get('period')) ? url.searchParams.get('period') : 'week';
     try {
@@ -767,7 +810,7 @@ http.createServer(async (req, res) => {
       }
     } catch (e) { console.error(e.message); }
   }
-  const rel = url.pathname === '/' || /^\/(overview|work|activity|repos|gists)\/?$/.test(url.pathname) ? '/index.html' : decodeURIComponent(url.pathname);
+  const rel = url.pathname === '/' || /^\/(overview|work|activity|repos|gists|sourcebin)\/?$/.test(url.pathname) ? '/index.html' : decodeURIComponent(url.pathname);
   const file = path.join(PUBLIC, path.normalize(rel));
   if (!file.startsWith(PUBLIC + path.sep)) { res.writeHead(403); return res.end(); }
   let pageName = '';

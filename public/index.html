@@ -33,7 +33,7 @@
 
   <section id="app" class="skeleton">
     <div class="tabs ptabs" id="ptabs" role="tablist">
-      <button data-p="overview" class="on">Overview</button><button data-p="work">Work</button><button data-p="activity">Activity</button><button data-p="repos">Repositories</button><button data-p="gists">Gists</button></div>
+      <button data-p="overview" class="on">Overview</button><button data-p="work">Work</button><button data-p="activity">Activity</button><button data-p="repos">Repositories</button><button data-p="gists">Gists</button><button data-p="sourcebin">SourceBin</button></div>
     <div class="pane" data-p="overview">
     <div class="row">
       <h2>Overview</h2>
@@ -89,6 +89,10 @@
     <section class="blk" id="gistblk" style="margin-top:0"><div id="gists"></div></section>
     </div>
 
+    <div class="pane" data-p="sourcebin" hidden>
+    <section class="blk" style="margin-top:0"><div id="bins"><div class="empty">Loading…</div></div><div class="sb-more" id="binmore"></div></section>
+    </div>
+
     <div class="pane" data-p="repos" hidden>
   <div class="search" style="margin-bottom:24px">
     <input id="q" placeholder="Search repositories…" autocomplete="off" aria-label="Search repositories">
@@ -105,7 +109,7 @@
 <script type="text/page">
 let repos = [];
 
-const PANES = ['overview', 'work', 'activity', 'repos', 'gists'];
+const PANES = ['overview', 'work', 'activity', 'repos', 'gists', 'sourcebin'];
 const paneFromPath = () => { const p = location.pathname.replace(/\//g, ''); return PANES.includes(p) ? p : 'overview'; };
 function showPane(p){
   document.querySelectorAll('#ptabs button').forEach(b => b.classList.toggle('on', b.dataset.p === p));
@@ -308,8 +312,29 @@ $('period').onchange = () => { document.querySelector('.err')?.remove(); load();
 $('repo').onchange = drawStats;
 $('tabs').onclick = (e) => e.target.dataset.k && drawOpen(e.target.dataset.k);
 $('q').oninput = drawRepos;
+// ---- SourceBin tab (public bins from /api/bins) ----
+let bins = [], binShown = 20;
+function drawBins(){
+  const box = $('bins');
+  if (!bins.length) { $('binmore').innerHTML = ''; return; }
+  box.innerHTML = bins.slice(0, binShown).map(b => { const more = b.fileCount > 1 ? ` <span class="pill">+${b.fileCount - 1}</span>` : '';
+    return `<a class="repo" href="${esc(b.url)}" target="_blank" rel="noopener"><div><div class="rn">${esc(b.title || b.files[0] || b.id)}${more}</div><div class="rd">${esc(b.description || b.files.join(', '))}</div></div>
+    <div class="rm">${esc(b.files[0] || '')}<br>${new Date(b.createdAt).toLocaleDateString()}</div></a>`; }).join('');
+  $('binmore').innerHTML = bins.length > binShown ? '<button class="more" type="button">Show more</button>' : '';
+}
+$('binmore').onclick = (e) => { if (e.target.closest('.more')) { binShown += 20; drawBins(); } };
+async function loadBins(){
+  try {
+    const r = await fetch('/api/bins'); const j = r.ok ? await r.json() : null;
+    if (!j || j.error) throw 0;
+    bins = j.items; drawBins();
+    if (!bins.length) $('bins').innerHTML = '<div class="empty">No public bins</div>';
+  } catch { $('bins').innerHTML = '<div class="empty">Couldn\'t load SourceBin</div>'; }
+}
+loadBins();
+
 load();
-window.SPA_PAGE = { owns: (p) => /^\/(overview|work|activity|repos|gists)?\/?$/.test(p), nav: (u) => { history.pushState(null, '', u); showPane(paneFromPath()); } };
+window.SPA_PAGE = { owns: (p) => /^\/(overview|work|activity|repos|gists|sourcebin)?\/?$/.test(p), nav: (u) => { history.pushState(null, '', u); showPane(paneFromPath()); } };
 </script>
 <script src="/router.js?v=20261115m"></script>
 <script src="/fx.js?v=20261115m"></script>
