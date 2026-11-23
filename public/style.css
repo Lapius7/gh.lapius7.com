@@ -340,6 +340,7 @@ a.chip:hover{border-color:var(--muted)}a.chip:active{transform:scale(.96)}
 .seg button:active{transform:scale(.96)}
 .sb-list{background:var(--panel);border-radius:12px;box-shadow:0 0 0 1px var(--line);overflow:hidden}
 .sb-list:empty{display:none}
+#lblk{padding-bottom:max(64px,env(safe-area-inset-bottom))}
 .sb-more{display:flex;justify-content:center;padding:14px 0 0;min-height:14px}
 .sb-more:empty{display:none}
 .sb-load{color:var(--muted);font-size:12px;line-height:28px}
